@@ -199,12 +199,20 @@ CPaintStatistics::CPaintStatistics(wxWindow* parent, wxWindowID id, const wxPoin
 	m_dc_bmp.Create(1, 1);
 	m_full_repaint = true;
 	m_bmp_OK = false;
+    
+#ifdef __WXMAC__
+    m_fauxStatisticsView = NULL;
+    SetupMacAccessibilitySupport();
+#endif
 }
 
 CPaintStatistics::~CPaintStatistics() {
     if (m_scrollBar) {
         delete m_scrollBar;
     }
+#ifdef __WXMAC__
+    RemoveMacAccessibilitySupport();
+#endif
 }
 
 
@@ -492,7 +500,7 @@ void CPaintStatistics::DrawLegend(wxDC &dc, PROJECTS* proj, CMainDocument* pDoc,
 	const wxCoord buffer_y1 = 3;
 	const wxCoord buffer_x1 = 3;
 	int count = -1;
-	int project_count = -1;
+//	int project_count = -1;
 	wxCoord w_temp = 0, h_temp = 0, des_temp = 0, lead_temp = 0;
 	wxCoord x0 = 0;
 	wxCoord y0 = 0;
@@ -591,7 +599,7 @@ void CPaintStatistics::DrawLegend(wxDC &dc, PROJECTS* proj, CMainDocument* pDoc,
     m_scrollBar->SetThumbPosition(m_Legend_Shift);
 //	Legend Shift (end)
 //---------------
-	project_count = count;
+//	project_count = count;
 	count = -1;
 
 	m_WorkSpace_X_end -= double(project_name_max_width) + m_Space_for_scrollbar;
@@ -813,12 +821,12 @@ void CPaintStatistics::DrawAxis(wxDC &dc, const double max_val_y, const double m
 	dc.DestroyClippingRegion();
 }
 //----Draw graph----
-void CPaintStatistics::DrawGraph(wxDC &dc, std::vector<PROJECT*>::const_iterator &i, const wxColour graphColour, const int typePoint, const int m_SelectedStatistic) {
+void CPaintStatistics::DrawGraph(wxDC &dc, std::vector<PROJECT*>::const_iterator &i, const wxColour graphColour, const int typePoint, const int selectedStatistic) {
     std::vector<DAILY_STATS> stats = (*i)->statistics;
-    DrawGraph2(dc, stats, graphColour, typePoint, m_SelectedStatistic);
+    DrawGraph2(dc, stats, graphColour, typePoint, selectedStatistic);
 }
 
-void CPaintStatistics::DrawGraph2(wxDC &dc, std::vector<DAILY_STATS> stats, const wxColour graphColour, const int typePoint, const int m_SelectedStatistic) {
+void CPaintStatistics::DrawGraph2(wxDC &dc, std::vector<DAILY_STATS> stats, const wxColour graphColour, const int typePoint, const int selectedStatistic) {
 	wxCoord x0 = wxCoord(m_Graph_X_start);
 	wxCoord y0 = wxCoord(m_Graph_Y_start);
 	wxCoord w0 = wxCoord(m_Graph_X_end - m_Graph_X_start);
@@ -869,8 +877,8 @@ void CPaintStatistics::DrawGraph2(wxDC &dc, std::vector<DAILY_STATS> stats, cons
 		b_point1 = false;
 		b_point2 = false;
 
-		d_xpos = (m_Ax_ValToCoord * j->day + m_Bx_ValToCoord);// добавить округление
-		switch (m_SelectedStatistic){  // добавить округление
+		d_xpos = (m_Ax_ValToCoord * j->day + m_Bx_ValToCoord);// Г¤Г®ГЎГ ГўГЁГІГј Г®ГЄГ°ГіГЈГ«ГҐГ­ГЁГҐ
+		switch (selectedStatistic){  // Г¤Г®ГЎГ ГўГЁГІГј Г®ГЄГ°ГіГЈГ«ГҐГ­ГЁГҐ
 		case show_user_total:	d_ypos = (m_Ay_ValToCoord * j->user_total_credit + m_By_ValToCoord);	break;
 		case show_user_average:	d_ypos = (m_Ay_ValToCoord * j->user_expavg_credit + m_By_ValToCoord);	break;
 		case show_host_total:	d_ypos = (m_Ay_ValToCoord * j->host_total_credit + m_By_ValToCoord);	break;
@@ -896,13 +904,13 @@ void CPaintStatistics::DrawGraph2(wxDC &dc, std::vector<DAILY_STATS> stats, cons
 			first_point = false;
 		}else {
 			dc.SetPen(wxPen(graphColour , m_GraphLineWidth , wxSOLID));
-			// проверка попадания первой точки линии в область рисования
+			// ГЇГ°Г®ГўГҐГ°ГЄГ  ГЇГ®ГЇГ Г¤Г Г­ГЁГї ГЇГҐГ°ГўГ®Г© ГІГ®Г·ГЄГЁ Г«ГЁГ­ГЁГЁ Гў Г®ГЎГ«Г Г±ГІГј Г°ГЁГ±Г®ГўГ Г­ГЁГї
 			if (last_point_in){ 
 				d_x1 = d_last_x;
 				d_y1 = d_last_y;
 				b_point1 = true;
 			}else b_point1 = false;
-			// проверка попадания второй точки линии в область рисования
+			// ГЇГ°Г®ГўГҐГ°ГЄГ  ГЇГ®ГЇГ Г¤Г Г­ГЁГї ГўГІГ®Г°Г®Г© ГІГ®Г·ГЄГЁ Г«ГЁГ­ГЁГЁ Гў Г®ГЎГ«Г Г±ГІГј Г°ГЁГ±Г®ГўГ Г­ГЁГї
 			if ((d_xpos < m_Graph_X_start) || (d_xpos > m_Graph_X_end) || 
 				(d_ypos < m_Graph_Y_start) || (d_ypos > m_Graph_Y_end)){
 				point_in = false;
@@ -913,7 +921,7 @@ void CPaintStatistics::DrawGraph2(wxDC &dc, std::vector<DAILY_STATS> stats, cons
 				d_y2 = d_ypos;
 				b_point2 = true;
 			}
-			// Ищем точку входа линии в область рисования (1) x=const
+			// Г€Г№ГҐГ¬ ГІГ®Г·ГЄГі ГўГµГ®Г¤Г  Г«ГЁГ­ГЁГЁ Гў Г®ГЎГ«Г Г±ГІГј Г°ГЁГ±Г®ГўГ Г­ГЁГї (1) x=const
 			if (!b_point1 || !b_point2){
 				if (CrossTwoLine(d_last_x, d_last_y, d_xpos, d_ypos, 
 								m_Graph_X_start, m_Graph_Y_end, m_Graph_X_start, m_Graph_Y_start,
@@ -946,7 +954,7 @@ void CPaintStatistics::DrawGraph2(wxDC &dc, std::vector<DAILY_STATS> stats, cons
 					}
 				}
 			}
-			// Ищем точку входа линии в область рисования (2) x=const
+			// Г€Г№ГҐГ¬ ГІГ®Г·ГЄГі ГўГµГ®Г¤Г  Г«ГЁГ­ГЁГЁ Гў Г®ГЎГ«Г Г±ГІГј Г°ГЁГ±Г®ГўГ Г­ГЁГї (2) x=const
 			if (!b_point1 || !b_point2){
 				if (CrossTwoLine(d_last_x, d_last_y, d_xpos, d_ypos, 
 								m_Graph_X_end, m_Graph_Y_end, m_Graph_X_end, m_Graph_Y_start,
@@ -979,7 +987,7 @@ void CPaintStatistics::DrawGraph2(wxDC &dc, std::vector<DAILY_STATS> stats, cons
 					}
 				}
 			}
-			// Ищем точку входа линии в область рисования (3) y=const
+			// Г€Г№ГҐГ¬ ГІГ®Г·ГЄГі ГўГµГ®Г¤Г  Г«ГЁГ­ГЁГЁ Гў Г®ГЎГ«Г Г±ГІГј Г°ГЁГ±Г®ГўГ Г­ГЁГї (3) y=const
 			if (!b_point1 || !b_point2){
 				if (CrossTwoLine(d_last_x, d_last_y, d_xpos, d_ypos, 
 								m_Graph_X_start, m_Graph_Y_start, m_Graph_X_end, m_Graph_Y_start,
@@ -1012,7 +1020,7 @@ void CPaintStatistics::DrawGraph2(wxDC &dc, std::vector<DAILY_STATS> stats, cons
 					}
 				}
 			}
-			// Ищем точку входа линии в область рисования (4) y=const
+			// Г€Г№ГҐГ¬ ГІГ®Г·ГЄГі ГўГµГ®Г¤Г  Г«ГЁГ­ГЁГЁ Гў Г®ГЎГ«Г Г±ГІГј Г°ГЁГ±Г®ГўГ Г­ГЁГї (4) y=const
 			if (!b_point1 || !b_point2){
 				if (CrossTwoLine(d_last_x, d_last_y, d_xpos, d_ypos, 
 								m_Graph_X_start, m_Graph_Y_end, m_Graph_X_end, m_Graph_Y_end,
@@ -1154,9 +1162,11 @@ void CPaintStatistics::DrawAll(wxDC &dc) {
 	dc.SetTextForeground (m_pen_HeadTextColour);
 	dc.SetTextBackground (GetBackgroundColour ());
 
-	m_font_standart = dc.GetFont();
-	m_font_bold = dc.GetFont();
-	m_font_standart_italic = dc.GetFont();
+    // The next 3 lines seem unnecessary and cause problems
+    // when monitor dpi is set to 125% of normal on MS Windows.
+//	m_font_standart = dc.GetFont();
+//	m_font_bold = dc.GetFont();
+//	m_font_standart_italic = dc.GetFont();
 	
 	m_font_standart.SetWeight(wxNORMAL);
 	m_font_bold.SetWeight(wxBOLD);
@@ -1910,6 +1920,9 @@ void CPaintStatistics::OnLegendScroll(wxScrollEvent& event) {
 void CPaintStatistics::OnSize(wxSizeEvent& event) {
 	m_full_repaint = true;
     Refresh(false);
+#ifdef __WXMAC__
+	ResizeMacAccessibilitySupport();
+#endif
     event.Skip();
 }
 
@@ -1927,8 +1940,6 @@ BEGIN_EVENT_TABLE (CViewStatistics, CBOINCBaseView)
     EVT_BUTTON(ID_TASK_STATISTICS_NEXTPROJECT, CViewStatistics::OnStatisticsNextProject)
     EVT_BUTTON(ID_TASK_STATISTICS_PREVPROJECT, CViewStatistics::OnStatisticsPrevProject)
     EVT_BUTTON(ID_TASK_STATISTICS_HIDEPROJLIST, CViewStatistics::OnShowHideProjectList)
-    EVT_LIST_ITEM_SELECTED(ID_LIST_STATISTICSVIEW, CViewStatistics::OnListSelected)
-    EVT_LIST_ITEM_DESELECTED(ID_LIST_STATISTICSVIEW, CViewStatistics::OnListDeselected)
 END_EVENT_TABLE ()
 
 CViewStatistics::CViewStatistics()
@@ -2051,17 +2062,10 @@ CViewStatistics::CViewStatistics(wxNotebook* pNotebook) :
     m_pTaskPane->UpdateControls();
 
     UpdateSelection();
-
-#ifdef __WXMAC__
-    SetupMacAccessibilitySupport();
-#endif
 }
 
 CViewStatistics::~CViewStatistics() {
     EmptyTasks();
-#ifdef __WXMAC__
-    RemoveMacAccessibilitySupport();
-#endif
 }
 
 wxString& CViewStatistics::GetViewName() {

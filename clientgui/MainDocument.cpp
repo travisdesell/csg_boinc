@@ -31,7 +31,6 @@
 #include "MainDocument.h"
 #include "BOINCBaseFrame.h"
 #include "AdvancedFrame.h"
-#include "sg_BoincSimpleGUI.h"
 #include "BOINCClientManager.h"
 #include "BOINCTaskBar.h"
 #include "DlgEventLog.h"
@@ -396,6 +395,8 @@ CMainDocument::CMainDocument() : rpc(this) {
     }
 #endif
 
+    strcpy(m_szLanguage, "");
+
     m_bClientStartCheckCompleted = false;
 
     m_ActiveTasksOnly = false;
@@ -556,24 +557,20 @@ int CMainDocument::OnExit() {
 
 
 int CMainDocument::OnPoll() {
+    CBOINCBaseFrame* pFrame = wxGetApp().GetFrame();
     int iRetVal = 0;
-    int otherInstanceID;
     wxString hostName = wxGetApp().GetClientHostNameArg();
-    int portNum = wxGetApp().GetClientRPCPortArg();
     wxString password = wxGetApp().GetClientPasswordArg();
+    int portNum = wxGetApp().GetClientRPCPortArg();
     
     wxASSERT(wxDynamicCast(m_pClientManager, CBOINCClientManager));
     wxASSERT(wxDynamicCast(m_pNetworkConnection, CNetworkConnection));
 
-    if (!m_bClientStartCheckCompleted) {
+    if (!m_bClientStartCheckCompleted && pFrame) {
         m_bClientStartCheckCompleted = true;
 
-        CBOINCBaseFrame* pFrame = wxGetApp().GetFrame();
-        wxASSERT(wxDynamicCast(pFrame, CBOINCBaseFrame));
-
         if (IsComputerNameLocal(hostName)) {
-            otherInstanceID = wxGetApp().IsAnotherInstanceRunning();
-            if (otherInstanceID) {
+            if (wxGetApp().IsAnotherInstanceRunning()) {
                 if (!pFrame->SelectComputer(hostName, portNum, password, true)) {
                     s_bSkipExitConfirmation = true;
                     wxCommandEvent event;
@@ -800,7 +797,7 @@ int CMainDocument::SetGPURunMode(int iMode, int iTimeout) {
         if (iMode == RUN_MODE_RESTORE) {
             GetCoreClientStatus(ccs, true);
         } else {
-            status.network_mode = iMode;
+            status.gpu_mode = iMode;
         }
     }
     return 0;
@@ -907,11 +904,11 @@ void CMainDocument::RunPeriodicRPCs(int frameRefreshRate) {
 
     if (!IsConnected()) {
         CFrameEvent event(wxEVT_FRAME_REFRESHVIEW, pFrame);
-        pFrame->AddPendingEvent(event);
+        pFrame->GetEventHandler()->AddPendingEvent(event);
         CTaskBarIcon* pTaskbar = wxGetApp().GetTaskBarIcon();
         if (pTaskbar) {
-            CTaskbarEvent tbevent(wxEVT_TASKBAR_REFRESH, pTaskbar);
-            pTaskbar->AddPendingEvent(tbevent);
+            CTaskbarEvent event(wxEVT_TASKBAR_REFRESH, pTaskbar);
+            pTaskbar->AddPendingEvent(event);
         }
         CDlgEventLog* eventLog = wxGetApp().GetEventLog();
         if (eventLog) {
@@ -933,6 +930,19 @@ void CMainDocument::RunPeriodicRPCs(int frameRefreshRate) {
     if (wxGetApp().IsSafeMesageBoxDisplayed()) {
         return;
     }
+
+	// SET_LANGUAGE 
+
+	static bool first = true;
+	if (first) {
+		first = false;
+        strcpy(m_szLanguage, wxGetApp().GetISOLanguageCode().mb_str());
+		request.clear();
+		request.which_rpc = RPC_SET_LANGUAGE;
+		request.arg1 = (void*)(const char*)&m_szLanguage;
+		request.rpcType = RPC_TYPE_ASYNC_NO_REFRESH;
+		RequestRPC(request);
+	}
 
     // *********** RPC_GET_CC_STATUS **************
     
@@ -988,6 +998,14 @@ void CMainDocument::RunPeriodicRPCs(int frameRefreshRate) {
             request.arg1 = &m_iNoticeSequenceNumber;
             request.arg2 = &notices;
             request.rpcType = RPC_TYPE_ASYNC_WITH_REFRESH_AFTER;
+            if (!pFrame->IsShown()
+#ifdef __WXMAC__
+                || (!wxGetApp().IsApplicationVisible())
+#endif
+            ) {
+                request.rpcType = RPC_TYPE_ASYNC_NO_REFRESH;
+            }
+
             request.completionTime = &m_dtNoticesTimeStamp;
             request.resultPtr = &m_iGet_notices_rpc_result;
            
@@ -1025,7 +1043,10 @@ void CMainDocument::RunPeriodicRPCs(int frameRefreshRate) {
     
     // Don't do periodic RPC calls when hidden / minimized
     if (!pFrame->IsShown()) return;
-   
+#ifdef __WXMAC__
+    if (!wxGetApp().IsApplicationVisible()) return;
+#endif
+
     m_dtLastFrameViewRefreshRPCTime = dtNow;
    
     // *********** RPC_GET_PROJECT_STATUS1 **************
@@ -1312,10 +1333,10 @@ PROJECT* CMainDocument::project(unsigned int i) {
 
 
 PROJECT* CMainDocument::project(char* url) {
-    for (unsigned int i=0; i< state.projects.size(); i++) {
-        PROJECT* tp = state.projects[i];
-        if (!strcmp(url, tp->master_url)) return tp;
-    }
+	for (unsigned int i=0; i< state.projects.size(); i++) {
+		PROJECT* tp = state.projects[i];
+		if (!strcmp(url, tp->master_url)) return tp;
+	}
     return NULL;
 }
 
@@ -1773,11 +1794,11 @@ int CMainDocument::WorkShowGraphics(RESULT* rp) {
 }
 
 
-int CMainDocument::WorkShowVMConsole(RESULT* result) {
+int CMainDocument::WorkShowVMConsole(RESULT* res) {
     int iRetVal = 0;
     
-    if (strlen(result->remote_desktop_addr)) {
-        wxString strConnection(result->remote_desktop_addr, wxConvUTF8);
+    if (strlen(res->remote_desktop_addr)) {
+        wxString strConnection(res->remote_desktop_addr, wxConvUTF8);
         wxString strCommand;
 
 #if   defined(__WXMSW__)
@@ -1796,7 +1817,7 @@ int CMainDocument::WorkShowVMConsole(RESULT* result) {
         //
         // First try to find the CoRD application by Bundle ID and Creator Code
         status = LSFindApplicationForInfo('RDC#', CFSTR("net.sf.cord"),   
-                                        NULL, &theFSRef, NULL);
+                                            NULL, &theFSRef, NULL);
         if (status != noErr) {
             CBOINCBaseFrame* pFrame = wxGetApp().GetFrame();
             if (pFrame) {
@@ -1806,13 +1827,13 @@ int CMainDocument::WorkShowVMConsole(RESULT* result) {
                     wxOK | wxICON_INFORMATION,
                     false
                 );
-            } 
-            return ERR_FILE_MISSING;
-        }
+        } 
+        return ERR_FILE_MISSING;
+    }
 
-        strCommand = wxT("osascript -e 'tell application \"CoRD\"' -e 'activate' -e 'open location \"rdp://") + strConnection + wxT("\"' -e 'end tell'");
-        strCommand.Replace(wxT("localhost"), wxT("127.0.0.1"));
-        system(strCommand.char_str());
+    strCommand = wxT("osascript -e 'tell application \"CoRD\"' -e 'activate' -e 'open location \"rdp://") + strConnection + wxT("\"' -e 'end tell'");
+    strCommand.Replace(wxT("localhost"), wxT("127.0.0.1"));
+    system(strCommand.char_str());
 #endif
     }
 
@@ -1977,41 +1998,43 @@ int CMainDocument::ResetNoticeState() {
 }
 
 
-// parse out the _(...)'s, and translate them
+// Replace CRLFs and LFs with HTML breaks.
 //
-bool CMainDocument::LocalizeNoticeText(wxString& strMessage, bool bSanitize, bool bClean) {
+void eol_to_br(wxString& strMessage) {
+    strMessage.Replace(wxT("\r\n"), wxT("<BR>"));
+    strMessage.Replace(wxT("\n"), wxT("<BR>"));
+}
+
+// Remove CRLFs and LFs
+//
+void remove_eols(wxString& strMessage) {
+    strMessage.Replace(wxT("\r\n"), wxT(""));
+    strMessage.Replace(wxT("\n"), wxT(""));
+}
+
+// Replace https:// with http://
+//
+void https_to_http(wxString& strMessage) {
+    strMessage.Replace(wxT("https://"), wxT("http://"));
+}
+
+// replace substrings of the form _("X") with the translation of X
+//
+void localize(wxString& strMessage) {
     wxString strBuffer = wxEmptyString;
     wxString strStart = wxString(wxT("_(\""));
     wxString strEnd = wxString(wxT("\")"));
 
-    if (bSanitize) {
-        // Replace CRLFs with HTML breaks.
-        strMessage.Replace(wxT("\r\n"), wxT("<BR>"));
-        // Replace LFs with HTML breaks.
-        strMessage.Replace(wxT("\n"), wxT("<BR>"));
-    }
-    if (bClean) {
-        // Replace CRLFs with HTML breaks.
-        strMessage.Replace(wxT("\r\n"), wxT(""));
-        // Replace LFs with HTML breaks.
-        strMessage.Replace(wxT("\n"), wxT(""));
-    }
-
-    // Localize translatable text
     while (strMessage.Find(strStart.c_str()) != wxNOT_FOUND) {
-        strBuffer = 
-            strMessage.SubString(
-                strMessage.Find(strStart.c_str()) + strStart.Length(),
-                strMessage.Find(strEnd.c_str()) - (strEnd.Length() - 1)
-            );
-
+        strBuffer = strMessage.SubString(
+            strMessage.Find(strStart.c_str()) + strStart.Length(),
+            strMessage.Find(strEnd.c_str()) - (strEnd.Length() - 1)
+        );
         strMessage.Replace(
             wxString(strStart + strBuffer + strEnd).c_str(),
             wxGetTranslation(strBuffer.c_str())
         );
     }
-
-    return true;
 }
 
 
@@ -2405,11 +2428,11 @@ int CMainDocument::GetSimpleGUIWorkCount() {
     CachedSimpleGUIUpdate();
     CachedStateUpdate();
 
-    for(i=0; i<results.results.size(); i++) {
-        if (results.results[i]->active_task) {
-            iCount++;
-        }
-    }
+	for(i=0; i<results.results.size(); i++) {
+		if (results.results[i]->active_task) {
+			iCount++;
+		}
+	}
     return iCount;
 }
 
@@ -2441,7 +2464,7 @@ wxString result_description(RESULT* result, bool show_resources) {
     PROJECT* project;
     CC_STATUS       status;
     int             retval;
-    wxString strBuffer= wxEmptyString;
+	wxString strBuffer= wxEmptyString;
 
     strBuffer.Clear();
     retval = doc->GetCoreClientStatus(status);
@@ -2454,7 +2477,7 @@ wxString result_description(RESULT* result, bool show_resources) {
     }
 
     project = doc->state.lookup_project(result->project_url);
-    int throttled = status.task_suspend_reason & SUSPEND_REASON_CPU_THROTTLE;
+	int throttled = status.task_suspend_reason & SUSPEND_REASON_CPU_THROTTLE;
     switch(result->state) {
     case RESULT_NEW:
         strBuffer += _("New"); 

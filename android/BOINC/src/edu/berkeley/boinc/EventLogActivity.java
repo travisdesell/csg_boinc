@@ -18,65 +18,82 @@
  ******************************************************************************/
 package edu.berkeley.boinc;
 
+import edu.berkeley.boinc.utils.*;
 import java.util.ArrayList;
-import java.util.List;
 import java.lang.StringBuffer;
-import edu.berkeley.boinc.adapter.EventLogListAdapter;
+import edu.berkeley.boinc.adapter.ClientLogListAdapter;
+import edu.berkeley.boinc.client.IMonitor;
 import edu.berkeley.boinc.client.Monitor;
 import edu.berkeley.boinc.rpc.Message;
 import android.content.ComponentName;
 import android.content.Intent;
 import android.content.ServiceConnection;
-import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.IBinder;
-import android.support.v4.app.FragmentActivity;
+import android.support.v7.app.ActionBar;
+import android.support.v7.app.ActionBarActivity;
+import android.support.v7.app.ActionBar.Tab;
+import android.text.ClipboardManager;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.MenuInflater;
-import android.widget.AbsListView;
-import android.widget.AbsListView.OnScrollListener;
+import android.widget.ArrayAdapter;
 import android.widget.ListView;
-import android.widget.TextView;
+import android.widget.Toast;
 
-
-public class EventLogActivity extends FragmentActivity {
-
-	private final String TAG = "BOINC EventLogActivity";
+public class EventLogActivity extends ActionBarActivity {
 	
-	private Monitor monitor;
+	private IMonitor monitor;
 	private Boolean mIsBound = false;
 
-	private ListView lv;
-	private EventLogListAdapter listAdapter;
-	private ArrayList<Message> data = new ArrayList<Message>();
+	public EventLogClientFragment clientFrag;
+	public ListView clientLogList;
+	public ClientLogListAdapter clientLogListAdapter;
+	public ArrayList<Message> clientLogData = new ArrayList<Message>();
+
+	public EventLogGuiFragment guiFrag;
+	public ListView guiLogList;
+	public ArrayAdapter<String> guiLogListAdapter;
+	public ArrayList<String> guiLogData = new ArrayList<String>();
 	
-	// message retrieval
-	private Integer pastMsgsLoadingRange = 50; // amount messages loaded when end of list is reached
+	private ArrayList<EventLogActivityTabListener<?>> listener = new ArrayList<EventLogActivityTabListener<?>>();
+	
+	final static int GUI_LOG_TAB_ACTIVE =1;
+	final static int CLIENT_LOG_TAB_ACTIVE =2;
 	
 	@Override
 	public void onCreate(Bundle savedInstanceState) {
-	    Log.d(TAG, "onCreate()");
+
+	    super.onCreate(savedInstanceState);
+        
+        // setup action bar
+        ActionBar actionBar = getSupportActionBar();
+        actionBar.setTitle(R.string.menu_eventlog);
+
+        actionBar.setNavigationMode(ActionBar.NAVIGATION_MODE_TABS);
+        
+        EventLogActivityTabListener<EventLogClientFragment> clientListener = new EventLogActivityTabListener<EventLogClientFragment>(this, getString(R.string.eventlog_client_header), EventLogClientFragment.class);
+        listener.add(clientListener);
+        Tab tab = actionBar.newTab()
+                .setText(R.string.eventlog_client_header)
+                .setTabListener(clientListener);
+        actionBar.addTab(tab);
+        
+        EventLogActivityTabListener<EventLogGuiFragment> guiListener = new EventLogActivityTabListener<EventLogGuiFragment>(this, getString(R.string.eventlog_gui_header), EventLogGuiFragment.class);
+        listener.add(guiListener);
+        tab = actionBar.newTab()
+                .setText(R.string.eventlog_gui_header)
+                .setTabListener(guiListener);
+        actionBar.addTab(tab);
+        
+        actionBar.setDisplayHomeAsUpEnabled(true);
 
 		doBindService();
-		setLayoutLoading();
-		
-	    super.onCreate(savedInstanceState);
-	}
-	
-	@Override
-	public void onResume() {
-		Log.d(TAG, "onResume()");
-
-		super.onResume();
-		
-		new RetrieveRecentMsgs().execute(); // refresh messages
 	}
 	
 	@Override
 	protected void onDestroy() {
-	    Log.d(TAG, "onDestroy()");
 	    doUnbindService();
 	    super.onDestroy();
 	}
@@ -87,10 +104,12 @@ public class EventLogActivity extends FragmentActivity {
 	 */
 	private ServiceConnection mConnection = new ServiceConnection() {
 	    public void onServiceConnected(ComponentName className, IBinder service) {
-	    	Log.d(TAG,"onServiceConnected");
-	        monitor = ((Monitor.LocalBinder)service).getService();
+	    	if(Logging.VERBOSE) Log.d(Logging.TAG,"EventLogActivity onServiceConnected");
+	        monitor = IMonitor.Stub.asInterface(service);
 		    mIsBound = true;
-		    initializeLayout();
+		    
+		    // initialize default fragment
+		    ((EventLogClientFragment) getSupportFragmentManager().findFragmentByTag(getString(R.string.eventlog_client_header))).init();
 	    }
 
 	    public void onServiceDisconnected(ComponentName className) {
@@ -112,65 +131,13 @@ public class EventLogActivity extends FragmentActivity {
 	    }
 	}
 	
-	// updates data list with most recent messages
-	private void loadRecentMsgs(ArrayList<Message> tmpA) {
-		// Prepend new messages to the event log
-		try {
-			int y = 0;
-			for (int x = tmpA.size()-1; x >= 0; x--) {
-				data.add(y, tmpA.get(x));
-				y++;
-			}
-		} catch (Exception e) {} //IndexOutOfBoundException
-		listAdapter.notifyDataSetChanged();
-	}
-	
-	// appends older messages to data list
-	private void loadPastMsgs(List<Message> tmpA) {
-		// Append old messages to the event log
-		try {
-			for(int x = tmpA.size()-1; x >= 0; x--) {
-				data.add(tmpA.get(x));
-			}
-		} catch (Exception e) {} //IndexOutOfBoundException
-		
-		listAdapter.notifyDataSetChanged();
-	}
-	
-	private void initializeLayout() {
-		try {
-			// check whether monitor is bound
-			if(!mIsBound) {
-				setLayoutLoading();
-				return;
-			}
-				
-			setContentView(R.layout.eventlog_layout); 
-			lv = (ListView) findViewById(R.id.eventlogList);
-		    listAdapter = new EventLogListAdapter(EventLogActivity.this, lv, R.id.eventlogList, data);
-		    lv.setOnScrollListener(new EndlessScrollListener(5));
-			
-			// initial data retrieval
-			new RetrievePastMsgs().execute();
-		} catch (Exception e) {
-			// data retrieval failed, set layout to loading...
-			setLayoutLoading();
-		}
-	}
-	
-	private void setLayoutLoading() {
-		setContentView(R.layout.generic_layout_loading); 
-        TextView loadingHeader = (TextView)findViewById(R.id.loading_header);
-        loadingHeader.setText(R.string.eventlog_loading);
+	public IMonitor getMonitorService() {
+		if(!mIsBound) if(Logging.WARNING) Log.w(Logging.TAG, "Fragment trying to obtain serive reference, but Monitor not bound in EventLogActivity");
+		return monitor;
 	}
 
 	@Override
 	public boolean onCreateOptionsMenu(Menu menu) {
-	    Log.d(TAG, "onCreateOptionsMenu()");
-
-		// call BOINCActivity's onCreateOptionsMenu to combine both menus
-		getParent().onCreateOptionsMenu(menu);
-		
 	    MenuInflater inflater = getMenuInflater();
 		inflater.inflate(R.menu.eventlog_menu, menu);
 
@@ -179,154 +146,91 @@ public class EventLogActivity extends FragmentActivity {
 	
 	@Override
 	public boolean onOptionsItemSelected(MenuItem item) {
-	    Log.d(TAG, "onOptionsItemSelected()");
-
 	    switch (item.getItemId()) {
+			case R.id.refresh:
+				updateCurrentFragment();
+				return true;
 			case R.id.email_to:
 				onEmailTo();
 				return true;
-			default:
-				return getParent().onOptionsItemSelected(item);
+			case R.id.copy:
+				onCopy();
+				return true;
 		}
+		return super.onOptionsItemSelected(item);
 	}
 	
-	public void onEmailTo() {
-
-		Intent emailIntent = new Intent(android.content.Intent.ACTION_SEND);
-		StringBuffer emailText = new StringBuffer();
-		Boolean copySelection = false;
-		
-		// Determine what kind of email operation we are going to use
-	    for (int index = 0; index < lv.getCount(); index++) {
-	    	if (lv.isItemChecked(index)) {
-	    		copySelection = true;
-	    	}
-	    }
-
-	    // Put together the email intent		
-		emailIntent.setType("plain/text");
-		emailIntent.putExtra(android.content.Intent.EXTRA_SUBJECT, "Event Log for BOINC on Android");
-
-		// Construct the message body
-		emailText.append("\n\nContents of the Event Log:\n\n");
-		if (copySelection) {
-			// Copy selected items
-		    for (int index = 0; index < lv.getCount(); index++) {
-		    	if (lv.isItemChecked(index)) {
-					emailText.append(listAdapter.getDate(index));
-					emailText.append("|");
-					emailText.append(listAdapter.getProject(index));
-					emailText.append("|");
-					emailText.append(listAdapter.getMessage(index));
-					emailText.append("\r\n");
-		    	}
-		    }
-		} else {
-			// Copy all items
-		    for (int index = 0; index < lv.getCount(); index++) {
-				emailText.append(listAdapter.getDate(index));
-				emailText.append("|");
-				emailText.append(listAdapter.getProject(index));
-				emailText.append("|");
-				emailText.append(listAdapter.getMessage(index));
-				emailText.append("\r\n");
+	private int getActiveLog() {
+		for(EventLogActivityTabListener<?> tmp: listener) {
+			if(tmp.currentlySelected) {
+				if(tmp.mClass == EventLogClientFragment.class) return CLIENT_LOG_TAB_ACTIVE;
+				else if(tmp.mClass == EventLogGuiFragment.class) return GUI_LOG_TAB_ACTIVE;
 			}
 		}
-		
-		emailIntent.putExtra(android.content.Intent.EXTRA_TEXT, emailText.toString());
-		
-		// Send it off to the Activity-Chooser
-		startActivity(Intent.createChooser(emailIntent, "Send mail..."));		
-
+		return -1;
 	}
 	
-	// onScrollListener for list view, implementing "endless scrolling"
-	public final class EndlessScrollListener implements OnScrollListener {
-
-        private int visibleThreshold = 5;
-        private int previousTotal = 0;
-        private boolean loading = true;
-
-        public EndlessScrollListener(int visibleThreshold) {
-            this.visibleThreshold = visibleThreshold;
-        }
-
-        @Override
-        public void onScroll(AbsListView view, int firstVisibleItem, int visibleItemCount, int totalItemCount) {
-            if (loading) {
-                if (totalItemCount > previousTotal) {
-                    loading = false;
-                    previousTotal = totalItemCount;
-                }
-            }
-            if (!loading && (totalItemCount - visibleItemCount) <= (firstVisibleItem + visibleThreshold)) {
-                new RetrievePastMsgs().execute();
-                loading = true;
-            }
-        }
-
-        @Override
-        public void onScrollStateChanged(AbsListView view, int scrollState) {
-        }
-    }
-	
-	private final class RetrieveRecentMsgs extends AsyncTask<Void,Void,ArrayList<Message>> {
-		
-		private Integer mostRecentSeqNo = 0;
-
-		@Override
-		protected void onPreExecute() {
-			if(!mIsBound) cancel(true); // cancel execution if monitor is not bound yet
-			try {
-				mostRecentSeqNo = data.get(0).seqno;
-			} catch (Exception e) {} //IndexOutOfBoundException
-		}
-		
-		@Override
-		protected ArrayList<Message> doInBackground(Void... params) {
-			return monitor.getEventLogMessages(mostRecentSeqNo); 
-		}
-
-		@Override
-		protected void onPostExecute(ArrayList<Message> result) {
-			// back in UI thread
-			loadRecentMsgs(result);
-		}
-	}
-	
-	private final class RetrievePastMsgs extends AsyncTask<Void,Void,List<Message>> {
-		
-		private Integer mostRecentSeqNo = null;
-		private Integer pastSeqNo = null;
-
-		@Override
-		protected void onPreExecute() {
-			if(!mIsBound) cancel(true); // cancel execution if monitor is not bound yet
-			try {
-				mostRecentSeqNo = data.get(0).seqno;
-				pastSeqNo = data.get(data.size()-1).seqno;
-				Log.d("RetrievePastMsgs","mostRecentSeqNo: " + mostRecentSeqNo + " ; pastSeqNo: " + pastSeqNo);
-				if(pastSeqNo==0) {
-					Log.d("RetrievePastMsgs", "cancel, all past messages are present");
-					cancel(true); // cancel if all past messages are present
+	private void updateCurrentFragment(){
+		for(EventLogActivityTabListener<?> tmp: listener) {
+			if(tmp.currentlySelected) {
+				if(tmp.mClass == EventLogClientFragment.class) {
+					((EventLogClientFragment) tmp.mFragment).update();
+				} else if(tmp.mClass == EventLogGuiFragment.class) {
+					((EventLogGuiFragment) tmp.mFragment).update();
 				}
-			} catch (Exception e) {} //IndexOutOfBoundException
+				break;
+			}
 		}
-		
-		@Override
-		protected List<Message> doInBackground(Void... params) {
-			Integer startIndex = 0;
-			if(mostRecentSeqNo != null && pastSeqNo != null && mostRecentSeqNo != 0 && pastSeqNo != 0) startIndex = mostRecentSeqNo - pastSeqNo + 1;
-			Integer lastIndexOfList = 0;
-			if(mostRecentSeqNo != null) lastIndexOfList = mostRecentSeqNo - 1;
-			//Log.d("RetrievePastMsgs", "calling monitor with: " + startIndex + lastIndexOfList);
-			return monitor.getEventLogMessages(startIndex, pastMsgsLoadingRange, lastIndexOfList); 
-		}
-
-		@Override
-		protected void onPostExecute(List<Message> result) {
-			// back in UI thread
-			loadPastMsgs(result);
-		}
+	}
+	
+	private void onCopy() {
+		try {
+			ClipboardManager clipboard = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE); 
+			clipboard.setText(getLogDataAsString());
+			Toast.makeText(getApplicationContext(), R.string.eventlog_copy_toast, Toast.LENGTH_SHORT).show();
+		} catch(Exception e) {if(Logging.WARNING) Log.w(Logging.TAG,"onCopy failed");}
+	}
+	
+	private void onEmailTo() {
+		try {
+			String emailText = getLogDataAsString();
+			
+			Intent emailIntent = new Intent(android.content.Intent.ACTION_SEND);
+	
+		    // Put together the email intent		
+			emailIntent.setType("plain/text");
+			emailIntent.putExtra(android.content.Intent.EXTRA_SUBJECT, getString(R.string.eventlog_email_subject));
+	
+			emailIntent.putExtra(android.content.Intent.EXTRA_TEXT, emailText);
+			
+			// Send it off to the Activity-Chooser
+			startActivity(Intent.createChooser(emailIntent, "Send mail..."));	
+		} catch(Exception e) {if(Logging.WARNING) Log.w(Logging.TAG,"onEmailTo failed");}
+	}
+	
+	// returns the content of the log as string
+	// clientLog = true: client log
+	// clientlog = false: gui log
+	private String getLogDataAsString() {
+		StringBuffer text = new StringBuffer();
+		int type = getActiveLog();
+		if(type == CLIENT_LOG_TAB_ACTIVE) {
+			text.append(getString(R.string.eventlog_client_header) + "\n\n");
+		    for (int index = 0; index < clientLogList.getCount(); index++) {
+				text.append(clientLogListAdapter.getDate(index));
+				text.append("|");
+				text.append(clientLogListAdapter.getProject(index));
+				text.append("|");
+				text.append(clientLogListAdapter.getMessage(index));
+				text.append("\n");
+			}
+		} else if(type == GUI_LOG_TAB_ACTIVE) {
+			text.append(getString(R.string.eventlog_gui_header) + "\n\n");
+		    for (String line: guiLogData) {
+				text.append(line);
+				text.append("\n");
+			}
+		}else if(Logging.WARNING) Log.w(Logging.TAG,"EventLogActivity could not determine which log active.");
+		return text.toString();
 	}
 }

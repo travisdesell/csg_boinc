@@ -32,6 +32,7 @@
 #include "parse.h"
 #include "util.h"
 #include "error_numbers.h"
+#include "str_replace.h"
 #include "str_util.h"
 #include "svn_version.h"
 
@@ -231,7 +232,7 @@ int main(int argc, char** argv) {
             log_messages.set_debug_level(dl);
             if (dl ==4) g_print_queries = true;
         } else if (is_arg(argv[i], "app")) {
-            strcpy(app.name, argv[++i]);
+            safe_strcpy(app.name, argv[++i]);
         } else if (is_arg(argv[i], "dont_update_db")) {
             // This option is for testing your assimilator.  When set,
             // it ensures that the assimilator does not actually modify

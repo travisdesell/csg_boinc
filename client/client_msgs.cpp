@@ -39,10 +39,6 @@ using std::deque;
 
 #include "client_msgs.h"
 
-#ifdef ANDROID
-#include "android/log.h"
-#endif
-
 MESSAGE_DESCS message_descs;
 
 #ifdef SIM
@@ -55,9 +51,11 @@ extern void show_message(
 // 2) As a NOTICE, if high priority (for GUI notices)
 // 3) write to log file (stdoutdae.txt)
 //
-void show_message(PROJ_AM *p, char* msg, int priority, bool is_html, const char* link) {
+void show_message(
+    PROJ_AM *p, char* msg, int priority, bool is_html, const char* link
+) {
     const char* x;
-    char message[1024], event_msg[1024];
+    char message[1024], event_msg[1024], evt_message[2048];
     char* time_string = time_to_string(gstate.now);
 
     // Cycle the log files if needed
@@ -104,13 +102,13 @@ void show_message(PROJ_AM *p, char* msg, int priority, bool is_html, const char*
         NOTICE n;
         n.description = buf;
         if (link) {
-            strcpy(n.link, link);
+            safe_strcpy(n.link, link);
         }
         if (p) {
-            strcpy(n.project_name, p->get_project_name());
+            safe_strcpy(n.project_name, p->get_project_name());
         }
         n.create_time = n.arrival_time = gstate.now;
-        strcpy(n.category, (priority==MSG_USER_ALERT)?"client":"scheduler");
+        safe_strcpy(n.category, (priority==MSG_USER_ALERT)?"client":"scheduler");
         notices.append(n);
     }
 
@@ -121,21 +119,15 @@ void show_message(PROJ_AM *p, char* msg, int priority, bool is_html, const char*
     } else {
         x = "---";
     }
-    printf("%s [%s] %s\n", time_string, x, message);
 
-#if defined(_WIN32) || defined(ANDROID)
-    char evt_message[2048];
+    // Construct message to be logged/displayed
     snprintf(evt_message, sizeof(evt_message), "%s [%s] %s\n", time_string,  x, message);
 
-#ifdef _WIN32      // print message to the debugger view port
-    ::OutputDebugString(evt_message);  
-#endif
-#ifdef ANDROID     // print message to Logcat
-    __android_log_print(ANDROID_LOG_INFO, "BOINC", evt_message);
-#endif 
+    // print message to the console
+    printf("%s", evt_message);
 
-#endif
-
+    // print message to the debugger view port
+    diagnostics_trace_to_debugger(evt_message);  
 }
 #endif
 
@@ -217,7 +209,7 @@ void MESSAGE_DESCS::write(int seqno, MIOFILE& fout, bool translatable) {
     fout.printf("<msgs>\n");
     for (i=j; i>=0; i--) {
         mdp = msgs[i];
-        strcpy(buf, mdp->message.c_str());
+        safe_strcpy(buf, mdp->message.c_str());
         if (!translatable) {
             strip_translation(buf);
         }

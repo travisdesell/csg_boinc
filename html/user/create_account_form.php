@@ -1,7 +1,7 @@
 <?php
 // This file is part of BOINC.
 // http://boinc.berkeley.edu
-// Copyright (C) 2008 University of California
+// Copyright (C) 2014 University of California
 //
 // BOINC is free software; you can redistribute it and/or modify it
 // under the terms of the GNU Lesser General Public License
@@ -16,7 +16,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with BOINC.  If not, see <http://www.gnu.org/licenses/>.
 
-require_once('../inc/db.inc');
+require_once('../inc/boinc_db.inc');
 require_once('../inc/util.inc');
 require_once('../inc/countries.inc');
 require_once('../inc/translation.inc');
@@ -28,20 +28,18 @@ $next_url = sanitize_local_url(get_str('next_url', true));
 
 redirect_to_secure_url("create_account_form.php?next_url=$next_url");
 
-page_head(tra("Create an account"), null, null, null, IE_COMPAT_MODE);
-
 $config = get_config();
 if (parse_bool($config, "disable_account_creation")) {
-    echo "
-        <h1>".tra("Account creation is disabled")."</h1>
-        <p>".tra("Account creation is currently disabled. Please try again later.")."</p>
-    ";
-    page_tail();
-    exit();
+    error_page("This project is not accepting new accounts");
 }
 
-$nwac = parse_bool($config, "no_web_account_creation");
-if (!$nwac && !no_computing()) {
+if (parse_bool($config, "no_web_account_creation")) {
+    error_page("This project has disabled Web account creation");
+}
+
+page_head(tra("Create an account"), null, null, null, IE_COMPAT_MODE);
+
+if (!no_computing()) {
     echo "<p>
         <b>".tra("NOTE: If you use the BOINC Manager, don't use this form. Just run BOINC, select Add Project, and enter an email address and password.")."</b></p>
     ";
@@ -52,10 +50,11 @@ echo "
     <form action=\"create_account_action.php\" method=\"post\">
     <input type=hidden name=next_url value=\"$next_url\">
 ";
+
 $teamid = get_int("teamid", true);
 if ($teamid) {
-    $team = lookup_team($teamid);
-    $user = lookup_user_id($team->userid);
+    $team = BoincTeam::lookup_id($teamid);
+    $user = BoincUser::lookup_id($team->userid);
     if (!$user) {
         echo "No such user";
     } else {
@@ -106,13 +105,13 @@ row2(
     "<input type=\"text\" name=\"postal_code\" size=\"20\">"
 );
 
-// Check if we need reCaptcha for making more safe the creation of accounts
+// Check if we're reCaptcha to prevent spam accounts
+//
 $publickey = parse_config($config, "<recaptcha_public_key>");
-
 if ($publickey) {
     row2(
         tra("Please enter the words shown in the image"),
-        recaptcha_get_html($publickey)
+        recaptcha_get_html($publickey, null, is_https())
     );
 }
 

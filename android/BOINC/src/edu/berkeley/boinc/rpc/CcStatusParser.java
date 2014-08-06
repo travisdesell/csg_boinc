@@ -22,13 +22,10 @@ package edu.berkeley.boinc.rpc;
 import org.xml.sax.Attributes;
 import org.xml.sax.SAXException;
 
-import edu.berkeley.boinc.debug.Logging;
-
 import android.util.Log;
 import android.util.Xml;
 
 public class CcStatusParser extends BaseParser {
-	private static final String TAG = "CcStatusParser";
 
 	private CcStatus mCcStatus;
 
@@ -44,8 +41,8 @@ public class CcStatusParser extends BaseParser {
 			return parser.getCcStatus();
 		}
 		catch (SAXException e) {
-			if (Logging.DEBUG) Log.d(TAG, "Malformed XML:\n" + rpcResult);
-			else if (Logging.INFO) Log.i(TAG, "Malformed XML");
+			e.printStackTrace();
+			Log.v("Larry", e.getMessage());
 			return null;
 		}
 	}
@@ -54,12 +51,6 @@ public class CcStatusParser extends BaseParser {
 	public void startElement(String uri, String localName, String qName, Attributes attributes) throws SAXException {
 		super.startElement(uri, localName, qName, attributes);
 		if (localName.equalsIgnoreCase("cc_status")) {
-			if (Logging.INFO) { 
-				if (mCcStatus != null) {
-					// previous <cc_status> not closed - dropping it!
-					Log.i(TAG, "Dropping unfinished <cc_status> data");
-				}
-			}
 			mCcStatus = new CcStatus();
 		}
 		else {
@@ -150,7 +141,6 @@ public class CcStatusParser extends BaseParser {
 			}
 		}
 		catch (NumberFormatException e) {
-			if (Logging.INFO) Log.i(TAG, "Exception when decoding " + localName);
 		}
 		mElementStarted = false;
 	}

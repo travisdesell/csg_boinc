@@ -31,10 +31,10 @@
 #define SLIDESHOWWIDTH 290
 #define SLIDESHOWHEIGHT 126
 #define SLIDESHOWBORDER 1
-#define DESCRIPTIONSPACER 4
 #define HIDEDEFAULTSLIDE 1
 #define TESTALLDESCRIPTIONS 0
-#define SCROLLBARWIDTH 18
+#define SCROLLBARSPACER 8
+
 
 enum { suspendedIcon, waitingIcon, runningIcon };
 
@@ -55,6 +55,7 @@ CScrolledTextBox::CScrolledTextBox( wxWindow* parent) :
     SetForegroundColour(*wxBLACK);
 
     m_TextSizer = new wxBoxSizer( wxVERTICAL );
+    m_hLine = GetCharHeight();
 
     this->SetSizerAndFit( m_TextSizer );
     this->Layout();
@@ -69,7 +70,7 @@ CScrolledTextBox::~CScrolledTextBox() {
 
 
 void CScrolledTextBox::SetValue(const wxString& s) {
-    int lineHeight, totalLines, availableWidth;
+    int lineHeight, totalLines, totalWidth, usableWidth;
     wxString t = s;
 
     // Delete sizer & its children (CTransparentStaticText objects)
@@ -78,12 +79,20 @@ void CScrolledTextBox::SetValue(const wxString& s) {
     // Change all occurrences of "<sup>n</sup>" to "^n"
     t.Replace(wxT("<sup>"), wxT("^"), true);
     t.Replace(wxT("</sup>"), wxT(""), true);
+    t.Replace(wxT("&lt;"), wxT("<"), true);
 
-    wxSize taskPanelSize = GetGrandParent()->GetSize();
-    availableWidth = taskPanelSize.GetWidth() - (2*SIDEMARGINS);
-    totalLines = Wrap(t, availableWidth - SCROLLBARWIDTH, &lineHeight);
-    
+    // First see if it fits without vertical scroll bar
+    totalWidth = GetSize().GetWidth();
+    totalLines = Wrap(t, totalWidth, &lineHeight);
     m_TextSizer->FitInside(this);
+    usableWidth = GetClientSize().GetWidth();
+    if (usableWidth < totalWidth) {
+        // It has a vertical scroll bar, so wrap again for reduced width
+        m_TextSizer->Clear(true);
+        totalLines = Wrap(t, usableWidth - SCROLLBARSPACER, &lineHeight);
+        m_TextSizer->FitInside(this);
+    }
+
     SetScrollRate(1, lineHeight);
 }
 
@@ -110,10 +119,7 @@ void CScrolledTextBox::OnOutputLine(const wxString& line) {
     if ( !line.empty() ) {
         m_TextSizer->Add(new CTransparentStaticText(this, wxID_ANY, line));
     } else { // empty line, no need to create a control for it
-        if ( !m_hLine ) {
-            m_hLine = GetCharHeight();
-        }
-        m_TextSizer->Add(5, m_hLine);
+        m_TextSizer->Add(5, m_hLine/3);
     }
 }
 
@@ -135,6 +141,7 @@ int CScrolledTextBox::Wrap(const wxString& text, int widthMax, int *lineHeight) 
         }
 
         if ( *p == _T('\n') || *p == _T('\0') ) {
+            line.Trim();
             OnOutputLine(line);
             m_eol = true;
             ++numLines;
@@ -154,6 +161,7 @@ int CScrolledTextBox::Wrap(const wxString& text, int widthMax, int *lineHeight) 
                 if ( width > widthMax ) {
                     // remove the last word from this line
                     line.erase(lastSpace - lineStart, p + 1 - lineStart);
+                    line.Trim();
                     OnOutputLine(line);
                     m_eol = true;
                     ++numLines;
@@ -193,17 +201,9 @@ CSlideShowPanel::CSlideShowPanel( wxWindow* parent ) :
     wxBoxSizer* bSizer1;
     bSizer1 = new wxBoxSizer( wxVERTICAL );
 
-    m_institution = new CTransparentStaticText( this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, 0 );
-    bSizer1->Add( m_institution, 0, 0, 0 );
-
-    m_scienceArea = new CTransparentStaticText( this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, 0 );
-    bSizer1->Add( m_scienceArea, 0, 0, 0 );
-    
-    bSizer1->AddSpacer(DESCRIPTIONSPACER);
-
     m_description = new CScrolledTextBox( this );
     GetSize(&w, &h);
-    m_description->SetMinSize(wxSize(w, h - (2 * GetCharHeight()) - DESCRIPTIONSPACER));
+    m_description->SetMinSize(wxSize(w, h));
     bSizer1->Add( m_description, 1, wxEXPAND, 0 );
 
     this->SetSizer( bSizer1 );
@@ -212,6 +212,7 @@ CSlideShowPanel::CSlideShowPanel( wxWindow* parent ) :
     m_SlideBitmap = wxNullBitmap;
     m_bCurrentSlideIsDefault = false;
     m_bGotAllProjectsList = false;
+    m_bHasBeenDrawn = false;
 
 #ifdef __WXMAC__
     // Tell accessibility aids to ignore this panel (but not its contents)
@@ -235,11 +236,36 @@ void CSlideShowPanel::OnSlideShowTimer(wxTimerEvent& WXUNUSED(event)) {
     AdvanceSlideShow(true, false);
 }
 
+void CSlideShowPanel::SetDescriptionText(void) {
+    unsigned int i;
+    wxString s, ss;
+
+    TaskSelectionData* selData = ((CSimpleTaskPanel*)GetParent())->GetTaskSelectionData();
+    if (selData == NULL) return;
+    for (i=0; i<m_AllProjectsList.projects.size(); i++) {
+        if (!strcmp(m_AllProjectsList.projects[i]->url.c_str(), selData->project_url)) {
+            s = wxString(m_AllProjectsList.projects[i]->home.c_str(), wxConvUTF8);
+            ss = wxGetTranslation(s);
+            ss.Append("\n\n");
+            s = wxString(m_AllProjectsList.projects[i]->specific_area.c_str(), wxConvUTF8);
+            ss += wxGetTranslation(s);
+            ss.Append("\n\n");
+            s = wxString(m_AllProjectsList.projects[i]->description.c_str(), wxConvUTF8);
+            ss += wxGetTranslation(s);
+            m_description->SetValue(ss);
+
+            m_description->Show(true);
+            Enable( true );
+            m_description->Enable();
+            this->Layout();
+            break;
+        }
+    }
+}
+
 
 void CSlideShowPanel::AdvanceSlideShow(bool changeSlide, bool reload) {
     double xRatio, yRatio, ratio;
-    unsigned int i;
-    wxString s;
     TaskSelectionData* selData = ((CSimpleTaskPanel*)GetParent())->GetTaskSelectionData();
     if (selData == NULL) return;
 
@@ -263,8 +289,6 @@ numSlides = 0;
         dc.DrawBitmap(backgroundBitmap, 0, 0);
 
         // Force redraws if text unchanged; hide all if not in all-projects list
-        m_institution->Show(false);
-        m_scienceArea->Show(false);
         m_description->Show(false);
         Enable( false );
         
@@ -276,24 +300,8 @@ numSlides = 0;
             m_bGotAllProjectsList = true;
         }
         
-        for (i=0; i<m_AllProjectsList.projects.size(); i++) {
-            if (!strcmp(m_AllProjectsList.projects[i]->url.c_str(), selData->project_url)) {
-                s = wxString(m_AllProjectsList.projects[i]->home.c_str(), wxConvUTF8);
-                m_institution->SetLabel(wxGetTranslation(s));
-                s = wxString(m_AllProjectsList.projects[i]->specific_area.c_str(), wxConvUTF8);
-                m_scienceArea->SetLabel(wxGetTranslation(s));
-                s = wxString(m_AllProjectsList.projects[i]->description.c_str(), wxConvUTF8);
-                m_description->SetValue(wxGetTranslation(s));
+        SetDescriptionText();
 
-                m_institution->Show(true);
-                m_scienceArea->Show(true);
-                m_description->Show(true);
-                Enable( true );
-                m_description->Enable();
-                this->Layout();
-                break;
-            }
-        }
         return;
 #else   // HIDEDEFAULTSLIDE
         SetBackgroundColour(*wxBLACK);
@@ -311,8 +319,6 @@ numSlides = 0;
 #endif  // HIDEDEFAULTSLIDE
     } else {
 #if HIDEDEFAULTSLIDE
-        m_institution->Show(false);
-        m_scienceArea->Show(false);
         m_description->Show(false);
         Enable( false );
 
@@ -408,6 +414,13 @@ numSlides = 0;
                             ); 
         }
     }
+    
+    if (!m_bHasBeenDrawn) {
+        m_bHasBeenDrawn = true;
+        if (numSlides <= 0) {
+            SetDescriptionText();
+        }
+    }
 } 
 
 
@@ -424,14 +437,19 @@ void CSlideShowPanel::OnEraseBackground(wxEraseEvent& event) {
 IMPLEMENT_DYNAMIC_CLASS(CSimpleTaskPanel, CSimplePanelBase)
 
 BEGIN_EVENT_TABLE(CSimpleTaskPanel, CSimplePanelBase)
-    EVT_BOINCBITMAPCOMBOBOX(ID_SGTASKSELECTOR, CSimpleTaskPanel::OnTaskSelection)
 #ifdef __WXMAC__
+    EVT_CHOICE(ID_SGTASKSELECTOR, CSimpleTaskPanel::OnTaskSelection)
+#else
+    EVT_COMBOBOX(ID_SGTASKSELECTOR, CSimpleTaskPanel::OnTaskSelection)
+#if 0   // This is apparently no longer needed with wxCocoa 3.0 
     EVT_ERASE_BACKGROUND(CSimpleTaskPanel::OnEraseBackground)    
+#endif
 #endif
 END_EVENT_TABLE()
 
 CSimpleTaskPanel::CSimpleTaskPanel() {
 }
+
 
 CSimpleTaskPanel::CSimpleTaskPanel( wxWindow* parent ) :
     CSimplePanelBase( parent )
@@ -456,7 +474,7 @@ CSimpleTaskPanel::CSimpleTaskPanel( wxWindow* parent ) :
 
     wxBoxSizer* bSizer2;
     bSizer2 = new wxBoxSizer( wxHORIZONTAL );
-    
+
     m_myTasksLabel = new CTransparentStaticText( this, wxID_ANY, _("Tasks:"), wxDefaultPosition, wxDefaultSize, 0 );
     m_myTasksLabel->Wrap( -1 );
     bSizer2->Add( m_myTasksLabel, 0, wxRIGHT, 5 );
@@ -524,7 +542,7 @@ CSimpleTaskPanel::CSimpleTaskPanel( wxWindow* parent ) :
     // non-standard progress indicator on Mac?  See also optimizations in 
     // CSimpleGUIPanel::OnEraseBackground and CSimpleTaskPanel::OnEraseBackground.
     m_ProgressBar = new wxGauge( this, wxID_ANY, 100, wxDefaultPosition, wxDefaultSize, wxGA_HORIZONTAL );
-    m_iPctDoneX10 = 1000;
+    m_ipctDoneX1000 = 100000;
     m_ProgressBar->SetValue( 100 );
     GetTextExtent(wxT("0"), &w, &h);
     m_ProgressBar->SetMinSize(wxSize(245, h));
@@ -621,8 +639,8 @@ void CSimpleTaskPanel::UpdatePanel(bool delayShow) {
             m_SlideShowArea->Hide();
             m_ElapsedTimeValue->Hide();
             m_TimeRemainingValue->Hide();
-            if (m_iPctDoneX10 >= 0) {
-                m_iPctDoneX10 = -1;
+            if (m_ipctDoneX1000 >= 0) {
+                m_ipctDoneX1000 = -1;
                 m_ProgressBar->Hide();
             }
             m_ProgressValueText->Hide();
@@ -697,14 +715,16 @@ void CSimpleTaskPanel::UpdatePanel(bool delayShow) {
 //                f = result->final_elapsed_time;
                 UpdateStaticText(&m_ElapsedTimeValue, GetElapsedTimeString(f));
                 UpdateStaticText(&m_TimeRemainingValue, GetTimeRemainingString(result->estimated_cpu_time_remaining));
-                int pctDoneX10 = result->fraction_done * 1000.0;
-                if (m_iPctDoneX10 != pctDoneX10) {
-                    int pctDone = pctDoneX10 / 10;
-                    if (m_iPctDoneX10 != (pctDone * 10)) {
+                // fraction_done ranges from 0.0 to 1.0 so % done = fraction_done * 100.
+                int pctDoneX1000 = result->fraction_done * 100000.0;
+                // Update progress only if visible part has changed (xx.xxx)
+                if (m_ipctDoneX1000 != pctDoneX1000) {
+                    int pctDone = pctDoneX1000 / 1000;
+                    if (m_ipctDoneX1000 != (pctDone * 1000)) {
                         m_ProgressBar->SetValue(pctDone);
                     }
                     s.Printf(_("%.3f%%"), result->fraction_done*100);
-                    m_iPctDoneX10 = pctDoneX10;
+                    m_ipctDoneX1000 = pctDoneX1000;
                     UpdateStaticText(&m_ProgressValueText, s);
                 }
                 UpdateStaticText(&m_StatusValueText, GetStatusString(result));
@@ -715,8 +735,8 @@ void CSimpleTaskPanel::UpdatePanel(bool delayShow) {
 #endif  // SELECTBYRESULTNAME
                 UpdateStaticText(&m_ElapsedTimeValue, GetElapsedTimeString(-1.0));
                 UpdateStaticText(&m_TimeRemainingValue, GetTimeRemainingString(-1.0));
-                if (m_iPctDoneX10 >= 0) {
-                    m_iPctDoneX10 = -1;
+                if (m_ipctDoneX1000 >= 0) {
+                    m_ipctDoneX1000 = -1;
                     m_ProgressBar->Hide();
                 }
                 UpdateStaticText(&m_ProgressValueText, wxEmptyString);
@@ -1253,16 +1273,17 @@ void CSimpleTaskPanel::OnEraseBackground(wxEraseEvent& event) {
     wxDC *dc = event.GetDC();
     
     if (m_ProgressBar->IsShown()) {
-        if (m_progressBarRect == NULL) {
+//        if (m_progressBarRect == NULL) {
             m_progressBarRect = new wxRect(m_ProgressBar->GetRect());
             m_progressBarRect->Inflate(1, 0);
-        }
+//        }
         dc->GetClippingBox(&clipRect.x, &clipRect.y, &clipRect.width, &clipRect.height);
         if (clipRect.IsEmpty() || m_progressBarRect->Contains(clipRect)) {
             return;
         }
     }
     
-    CSimplePanelBase::OnEraseBackground(event);
+//    CSimplePanelBase::OnEraseBackground(event);
+    event.Skip();
 }
 #endif

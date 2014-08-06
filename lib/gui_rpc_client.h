@@ -168,6 +168,9 @@ struct PROJECT {
         // when the last successful scheduler RPC finished
     std::vector<DAILY_STATS> statistics; // credit data over the last x days
     char venue[256];
+    int njobs_success;
+    int njobs_error;
+    char cross_project_id[64];
 
     // NOTE: if you add any data items above,
     // update parse(), and clear() to include them!!
@@ -279,6 +282,8 @@ struct RESULT {
     double working_set_size_smoothed;
     double estimated_cpu_time_remaining;
         // actually, estimated elapsed time remaining
+    double bytes_sent;
+    double bytes_received;
     bool too_large;
     bool needs_shmem;
     bool edf_scheduled;
@@ -421,6 +426,7 @@ struct PROJECTS {
     ~PROJECTS();
 
     void print();
+    void print_urls();
     void clear();
 };
 
@@ -534,6 +540,9 @@ struct PROJECT_CONFIG {
     int error_num;
     std::string name;
     std::string master_url;
+    std::string web_rpc_url_base;
+        // prefix for create_account, lookup_account web RPCs
+        // If absent, use the master URL
     int local_revision;     // SVN changeset# of server software
     int min_passwd_length;
     bool account_manager;
@@ -560,6 +569,7 @@ struct PROJECT_CONFIG {
 
 struct ACCOUNT_IN {
     std::string url;
+        // URL prefix for web RPCs
     std::string email_addr;
         // the account identifier (email address or user name)
     std::string user_name;
@@ -633,6 +643,22 @@ struct DAILY_XFER_HISTORY {
     void print();
 };
 
+// Keep this consistent with client/result.h
+//
+struct OLD_RESULT {
+    char project_url[256];
+    char result_name[256];
+    char app_name[256];
+    int exit_status;
+    double elapsed_time;
+    double cpu_time;
+    double completed_time;
+    double create_time;
+
+    int parse(XML_PARSER&);
+    void print();
+};
+
 struct RPC_CLIENT {
     int sock;
     double start_time;
@@ -659,11 +685,13 @@ struct RPC_CLIENT {
         // retry: if true, keep retrying until succeed or timeout.
         //    Use this if just launched the core client.
     int init_poll();
+    int init_unix_domain();
     void close();
     int authorize(const char* passwd);
     int exchange_versions(VERSION_INFO&);
     int get_state(CC_STATE&);
     int get_results(RESULTS&, bool active_only = false);
+    int get_old_results(std::vector<OLD_RESULT>&);
     int get_file_transfers(FILE_TRANSFERS&);
     int get_simple_gui_info(SIMPLE_GUI_INFO&);
     int get_project_status(PROJECTS&);
@@ -729,9 +757,10 @@ struct RPC_CLIENT {
     int set_global_prefs_override(std::string&);
     int get_global_prefs_override_struct(GLOBAL_PREFS&, GLOBAL_PREFS_MASK&);
     int set_global_prefs_override_struct(GLOBAL_PREFS&, GLOBAL_PREFS_MASK&);
-    int get_cc_config(CONFIG& config, LOG_FLAGS& log_flags);
-    int set_cc_config(CONFIG& config, LOG_FLAGS& log_flags);
+    int get_cc_config(CC_CONFIG& config, LOG_FLAGS& log_flags);
+    int set_cc_config(CC_CONFIG& config, LOG_FLAGS& log_flags);
     int get_daily_xfer_history(DAILY_XFER_HISTORY&);
+	int set_language(const char*);
 };
 
 struct RPC {

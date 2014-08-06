@@ -25,11 +25,6 @@
 #include <grp.h>
 #include <dirent.h>
 #include <cerrno>
-
-#if (defined(__APPLE__) && defined(_DEBUG))
-#include <Carbon/Carbon.h>
-#endif
-
 #include "util.h"
 #include "error_numbers.h"
 #include "file_names.h"
@@ -42,7 +37,8 @@ bool IsUserInGroupBM();
 static int CheckNestedDirectories(
     char * basepath, int depth, 
     int use_sandbox, int isManager, 
-    char * path_to_error
+    char * path_to_error,
+    int len
 );
 
 #if (! defined(__WXMAC__) && ! defined(_MAC_INSTALLER))
@@ -70,7 +66,7 @@ int check_security(
 #ifdef _MAC_INSTALLER
 char *bundlePath, char *dataPath,
 #endif
-int use_sandbox, int isManager, char* path_to_error
+int use_sandbox, int isManager, char* path_to_error, int len
 ) {
     passwd              *pw;
     group               *grp;
@@ -80,10 +76,6 @@ int use_sandbox, int isManager, char* path_to_error
     struct stat         sbuf;
     int                 retval;
     int                 useFakeProjectUserAndGroup = 0;
-#if (defined(__APPLE__) && defined(_DEBUG))
-    long                response;
-    OSStatus            err = noErr;
-#endif
 #ifdef __WXMAC__                            // If Mac BOINC Manager
     ProcessSerialNumber ourPSN;
     ProcessInfoRec      pInfo;
@@ -103,11 +95,6 @@ saverName[2] = "Progress Thru Processors";
 #ifdef DEBUG_WITH_FAKE_PROJECT_USER_AND_GROUP
         useFakeProjectUserAndGroup = 1;
 #endif
-#ifdef __APPLE__
-    err = Gestalt(gestaltSystemVersion, (SInt32*)&response);
-    if ((err == noErr) && (response < 0x1040))
-        useFakeProjectUserAndGroup = 1;
-#endif      // __APPLE__
 #endif      // _DEBUG
 
 // GDB can't attach to applications which are running as a diferent user or group so
@@ -371,7 +358,7 @@ saverName[2] = "Progress Thru Processors";
             return -1026;
 
         // Step through project directories
-        retval = CheckNestedDirectories(full_path, 1, use_sandbox, isManager, path_to_error);
+        retval = CheckNestedDirectories(full_path, 1, use_sandbox, isManager, path_to_error, len);
         if (retval)
             return retval;
     }
@@ -391,7 +378,7 @@ saverName[2] = "Progress Thru Processors";
             return -1029;
 
         // Step through slot directories
-        retval = CheckNestedDirectories(full_path, 1, use_sandbox, isManager, path_to_error);
+        retval = CheckNestedDirectories(full_path, 1, use_sandbox, isManager, path_to_error, len);
         if (retval)
             return retval;
     }
@@ -503,10 +490,11 @@ saverName[2] = "Progress Thru Processors";
 }
 
 
-static int CheckNestedDirectories(char * basepath, int depth,
-                                    int use_sandbox, int isManager, 
-                                    char * path_to_error
-                                ) {
+static int CheckNestedDirectories(
+    char * basepath, int depth,
+    int use_sandbox, int isManager, 
+    char * path_to_error, int len
+) {
     int             isDirectory;
     char            full_path[MAXPATHLEN];
     struct stat     sbuf;
@@ -603,7 +591,7 @@ static int CheckNestedDirectories(char * basepath, int depth,
 #endif
                     continue;       // Client can't check subdirectories owned by boinc_project
             }
-            retval = CheckNestedDirectories(full_path, depth + 1, use_sandbox, isManager, path_to_error);
+            retval = CheckNestedDirectories(full_path, depth + 1, use_sandbox, isManager, path_to_error, len);
             if (retval)
                 break;
         }
@@ -616,7 +604,9 @@ static int CheckNestedDirectories(char * basepath, int depth,
     
     if (retval && !errShown) {
         fprintf(stderr, "Permissions error %d at %s\n", retval, full_path);
-        if (path_to_error) strcpy(path_to_error, full_path);
+        if (path_to_error) {
+            strlcpy(path_to_error, full_path, len);
+        }
         errShown = 1;
     }
     return retval;

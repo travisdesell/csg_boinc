@@ -25,6 +25,7 @@
 #include "error_numbers.h"
 #include "filesys.h"
 #include "md5_file.h"
+#include "str_replace.h"
 
 #include "app.h"
 #include "client_msgs.h"
@@ -47,7 +48,7 @@ int ASYNC_COPY::init(
 ) {
     atp = _atp;
     fip = _fip;
-    strcpy(to_path, _to_path);
+    safe_strcpy(to_path, _to_path);
 
     if (log_flags.async_file_debug) {
         msg_printf(atp->wup->project, MSG_INFO,
@@ -56,9 +57,10 @@ int ASYNC_COPY::init(
     }
     in = fopen(from_path, "rb");
     if (!in) return ERR_FOPEN;
-    strcpy(temp_path, to_path);
+    safe_strcpy(temp_path, to_path);
     char* p = strrchr(temp_path, '/');
-    strcpy(p+1, "copy_temp");
+    *(p+1) = 0;
+    strlcat(temp_path, "copy_temp", sizeof(temp_path));
 #ifdef _WIN32
     boinc_allocate_file(temp_path, fip->nbytes);
 #endif
@@ -168,10 +170,11 @@ int ASYNC_VERIFY::init(FILE_INFO* _fip) {
         );
     }
     if (fip->download_gzipped) {
-        strcpy(outpath, inpath);
-        strcpy(temp_path, outpath);
+        safe_strcpy(outpath, inpath);
+        safe_strcpy(temp_path, outpath);
         char* p = strrchr(temp_path, '/');
-        strcpy(p+1, "verify_temp");
+        *(p+1) = 0;
+        strlcat(temp_path, "verify_temp", sizeof(temp_path));
 #ifdef _WIN32
         boinc_allocate_file(temp_path, fip->nbytes);
 #endif
@@ -269,7 +272,7 @@ int ASYNC_VERIFY::verify_chunk() {
             md5_append(&md5_state, buf, n);
         }
     } else {
-        n = fread(buf, 1, BUFSIZE, in);
+        n = (int)fread(buf, 1, BUFSIZE, in);
         if (n <= 0) {
             fclose(in);
             finish();

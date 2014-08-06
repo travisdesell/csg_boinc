@@ -71,7 +71,7 @@ function get_batch_params($batch, $wus) {
     if ($fp_total) {
         $batch->fraction_done = $fp_done / $fp_total;
     }
-    if ($completed && $batch->state < BATCH_STATE_COMPLETE) {
+    if ($completed && $batch->state == BATCH_STATE_IN_PROGRESS) {
         $batch->state = BATCH_STATE_COMPLETE;
         $batch->completion_time = time();
     }
@@ -123,13 +123,23 @@ function abort_batch($batch) {
     return 0;
 }
 
+// mark WUs as assimilated; this lets them be purged
+//
 function retire_batch($batch) {
     $wus = BoincWorkunit::enum("batch=$batch->id");
     $now = time();
     foreach ($wus as $wu) {
-        $wu->update("assimilate_state=2, transition_time=$now");
+        $wu->update(
+            "assimilate_state=".ASSIMILATE_DONE.", transition_time=$now"
+        );
     }
     $batch->update("state=".BATCH_STATE_RETIRED);
+}
+
+function expire_batch($batch) {
+    abort_batch($batch);
+    retire_batch($batch);
+    $batch->update("state=".BATCH_STATE_EXPIRED);
 }
 
 function batch_state_string($state) {

@@ -24,7 +24,10 @@
 // #defines or enums that are shared by more than one BOINC component
 // (e.g. client, server, Manager, etc.)
 
-#define GUI_RPC_PORT                                31416
+#define GUI_RPC_PORT 31416
+    // for TCP connection
+#define GUI_RPC_FILE "boinc_socket"
+    // for Unix-domain connection
 
 #define COBBLESTONE_SCALE 200/86400e9
     // multiply normalized PFC by this to get Cobblestones
@@ -89,8 +92,11 @@
     // (used internally within the client;
     // changed to MSG_USER_ALERT before passing to manager)
     
-// bitmap defs for task_suspend_reason, network_suspend_reason
-// Note: doesn't need to be a bitmap, but keep for compatibility
+// values for suspend_reason, network_suspend_reason
+// Notes:
+// - doesn't need to be a bitmap, but keep for compatibility
+// - with new CPU throttling implementation (separate thread)
+//   CLIENT_STATE.suspend_reason will never be SUSPEND_REASON_CPU_THROTTLE.
 //
 enum SUSPEND_REASON {
     SUSPEND_REASON_BATTERIES = 1,
@@ -194,10 +200,24 @@ enum BATTERY_STATE {
 #define RPC_REASON_INIT             6
 #define RPC_REASON_PROJECT_REQ      7
 
+// values of batch.state
+// see html/inc/common_defs.inc
+//
+#define BATCH_STATE_INIT            0
+#define BATCH_STATE_IN_PROGRESS     1
+#define BATCH_STATE_COMPLETE        2
+    // "complete" means all workunits have either
+    // a canonical result or an error
+#define BATCH_STATE_ABORTED         3
+#define BATCH_STATE_RETIRED         4
+    // input/output files can be deleted,
+    // result and workunit records can be purged.
+
 struct TIME_STATS {
-// we maintain an exponentially weighted average of these quantities:
     double now;
-        // the client's time of day
+        // the client's current time of day
+
+    // we maintain an exponentially weighted average of these quantities:
     double on_frac;
         // the fraction of total time this host runs the client
     double connected_frac;
@@ -215,9 +235,27 @@ struct TIME_STATS {
         // (as determined by preferences, manual suspend/resume, etc.)
     double gpu_active_frac;
         // same, GPU
+
+    // info for the current session (i.e. run of the client)
+    //
     double client_start_time;
+        // start of current session
     double previous_uptime;
         // duration of previous session
+    double session_active_duration;
+        // time computation enabled
+    double session_gpu_active_duration;
+        // time GPU computation enabled
+
+    // info since the client was first run
+    //
+    double total_start_time;
+    double total_duration;
+        // time BOINC client has run
+    double total_active_duration;
+        // time computation allowed
+    double total_gpu_active_duration;
+        // time GPU computation allowed
 
     void write(MIOFILE&);
     int parse(XML_PARSER&);
@@ -243,6 +281,11 @@ struct DEVICE_STATUS {
     int battery_state;      // see above
     double battery_temperature_celsius;
     bool wifi_online;
+    bool user_active;
+    char device_name[256];
+        // if present, a user-selected name for the device.
+        // This will be stored by the client as hostinfo.domain_name,
+        // and reported to schedulers.
 
     int parse(XML_PARSER&);
     DEVICE_STATUS() {
@@ -252,6 +295,8 @@ struct DEVICE_STATUS {
         battery_state =  BATTERY_STATE_UNKNOWN;
         battery_temperature_celsius = 0;
         wifi_online = false;
+        user_active = false;
+        strcpy(device_name, "");
     }
 };
 

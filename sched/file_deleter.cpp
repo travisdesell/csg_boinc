@@ -62,14 +62,17 @@
 #define PIDFILE  "file_deleter.pid"
 
 #define DEFAULT_SLEEP_INTERVAL 5
-#define RESULTS_PER_WU 4        // an estimate of redundancy 
+#define RESULTS_PER_WU 4        // an estimate of redundancy
 
 int id_modulus=0, id_remainder=0, appid=0;
 bool dont_retry_errors = false;
 bool dont_delete_batches = false;
 bool do_input_files = true;
 bool do_output_files = true;
+bool dry_run = false;
 int sleep_interval = DEFAULT_SLEEP_INTERVAL;
+char *xml_doc_like = NULL;
+char *download_dir = NULL;
 
 void usage(char *name) {
     fprintf(stderr, "Deletes files that are no longer needed.\n\n"
@@ -94,7 +97,11 @@ void usage(char *name) {
         "                                  For debugging.\n"
         "  --dont_delete_batches           don't delete anything with positive batch number\n"
         "  --input_files_only              delete only input (download) files\n"
+        "  --dry_run                       Don't update DB\n"
+        "                                  For debugging.\n"
         "  --output_files_only             delete only output (upload) files\n"
+        "  --xml_doc_like L                only process workunits where xml_doc LIKE 'L'\n"
+        "  --download_dir D                override download_dir from project config with D\n"
         "  [ -h | --help ]                 shows this help text\n"
         "  [ -v | --version ]              shows version information\n",
         name
@@ -108,7 +115,9 @@ void usage(char *name) {
 int get_file_path(
     const char *filename, char* upload_dir, int fanout, char* path
 ) {
-    dir_hier_path(filename, upload_dir, fanout, path, true);
+    if (dir_hier_path(filename, upload_dir, fanout, path, false)) {
+        return ERR_OPENDIR;
+    }
     if (boinc_file_exists(path)) {
         return 0;
     }
@@ -123,16 +132,20 @@ int get_file_path(
 
 int wu_delete_files(WORKUNIT& wu) {
     char* p;
-    char filename[256], pathname[256], buf[BLOB_SIZE];
+    char filename[256], path[MAXPATHLEN], buf[BLOB_SIZE];
+    char path_gz[MAXPATHLEN], path_md5[MAXPATHLEN];
     bool no_delete=false;
     int count_deleted = 0, retval, mthd_retval = 0;
 
     if (strstr(wu.name, "nodelete")) return 0;
 
     safe_strcpy(buf, wu.xml_doc);
-    
+
     p = strtok(buf, "\n");
     strcpy(filename, "");
+
+    // TODO: use the XML parser.  Yuck!
+    //
     while (p) {
         if (parse_str(p, "<name>", filename, sizeof(filename))) {
         } else if (match_tag(p, "<file_info>")) {
@@ -143,45 +156,56 @@ int wu_delete_files(WORKUNIT& wu) {
         } else if (match_tag(p, "</file_info>")) {
             if (!no_delete) {
                 retval = get_file_path(
-                    filename, config.download_dir, config.uldl_dir_fanout,
-                    pathname
+                    filename, download_dir, config.uldl_dir_fanout,
+                    path
                 );
                 if (retval == ERR_OPENDIR) {
                     log_messages.printf(MSG_CRITICAL,
-                        "[WU#%d] missing dir for %s\n",
+                        "[WU#%u] missing dir for %s\n",
                         wu.id, filename
                     );
                     mthd_retval = ERR_UNLINK;
                 } else if (retval) {
                     log_messages.printf(MSG_CRITICAL,
-                        "[WU#%d] get_file_path: %s: %s\n",
+                        "[WU#%u] get_file_path: %s: %s\n",
                         wu.id, filename, boincerror(retval)
                     );
                 } else {
                     log_messages.printf(MSG_NORMAL,
-                        "[WU#%d] deleting %s\n", wu.id, filename
+                        "[WU#%u] deleting %s\n", wu.id, filename
                     );
-                    retval = unlink(pathname);
+                    retval = unlink(path);
                     if (retval) {
                         log_messages.printf(MSG_CRITICAL,
-                            "[WU#%d] unlink %s failed: %s\n",
+                            "[WU#%u] unlink %s failed: %s\n",
                             wu.id, filename, boincerror(retval)
                         );
                         mthd_retval = ERR_UNLINK;
                     } else {
                         count_deleted++;
                     }
+
+                    // delete the gzipped version of the file
+                    //
+                    sprintf(path_gz, "%s.gz", path);
+                    retval = unlink(path_gz);
+                    if (!retval) {
+                        log_messages.printf(MSG_NORMAL,
+                            "[WU#%u] deleted %s.gz\n", wu.id, filename
+                        );
+                    }
+
                     // delete the cached MD5 file if needed
                     //
                     if (config.cache_md5_info) {
-                        strcat(pathname,".md5");
+                        sprintf(path_md5, "%s.md5", path);
                         log_messages.printf(MSG_NORMAL,
-                            "[WU#%d] deleting %s\n", wu.id, filename
+                            "[WU#%u] deleting %s.md5\n", wu.id, filename
                         );
-                        retval = unlink(pathname);
+                        retval = unlink(path_md5);
                         if (retval) {
                             log_messages.printf(MSG_CRITICAL,
-                                "[WU#%d] unlink %s failed: %s\n",
+                                "[WU#%u] unlink %s.md5 failed: %s\n",
                                 wu.id, filename, boincerror(retval)
                             );
                         }
@@ -192,7 +216,7 @@ int wu_delete_files(WORKUNIT& wu) {
         p = strtok(0, "\n");
     }
     log_messages.printf(MSG_DEBUG,
-        "[WU#%d] deleted %d file(s)\n", wu.id, count_deleted
+        "[WU#%u] deleted %d file(s)\n", wu.id, count_deleted
     );
     return mthd_retval;
 }
@@ -221,7 +245,7 @@ int result_delete_files(RESULT& result) {
                 if (retval == ERR_OPENDIR) {
                     mthd_retval = ERR_OPENDIR;
                     log_messages.printf(MSG_CRITICAL,
-                        "[RESULT#%d] missing dir for %s\n",
+                        "[RESULT#%u] missing dir for %s\n",
                         result.id, pathname
                     );
                 } else if (retval) {
@@ -237,7 +261,7 @@ int result_delete_files(RESULT& result) {
                         debug_or_crit=MSG_DEBUG;
                     }
                     log_messages.printf(debug_or_crit,
-                        "[RESULT#%d] outcome=%d client_state=%d No file %s to delete\n",
+                        "[RESULT#%u] outcome=%d client_state=%d No file %s to delete\n",
                         result.id, result.outcome, result.client_state, filename
                     );
                 } else {
@@ -245,14 +269,14 @@ int result_delete_files(RESULT& result) {
                     if (retval) {
                         mthd_retval = ERR_UNLINK;
                         log_messages.printf(MSG_CRITICAL,
-                            "[RESULT#%d] unlink %s error: %s %s\n",
+                            "[RESULT#%u] unlink %s error: %s %s\n",
                             result.id, pathname, boincerror(retval),
                             (retval && errno)?strerror(errno):""
                         );
                     } else {
                         count_deleted++;
                         log_messages.printf(MSG_NORMAL,
-                            "[RESULT#%d] unlinked %s\n", result.id, pathname
+                            "[RESULT#%u] unlinked %s\n", result.id, pathname
                         );
                     }
                 }
@@ -262,7 +286,7 @@ int result_delete_files(RESULT& result) {
     }
 
     log_messages.printf(MSG_DEBUG,
-        "[RESULT#%d] deleted %d file(s)\n", result.id, count_deleted
+        "[RESULT#%u] deleted %d file(s)\n", result.id, count_deleted
     );
     return mthd_retval;
 }
@@ -295,50 +319,6 @@ bool do_pass(bool retry_error) {
         sprintf(buf, " and appid = %d ", appid);
         strcat(clause, buf);
     }
-    sprintf(buf,
-        "where file_delete_state=%d %s limit %d",
-        retry_error?FILE_DELETE_ERROR:FILE_DELETE_READY,
-        clause, WUS_PER_ENUM
-    );
-
-    while (do_input_files) {
-        retval = wu.enumerate(buf);
-        if (retval) {
-            if (retval != ERR_DB_NOT_FOUND) {
-                log_messages.printf(MSG_DEBUG, "DB connection lost, exiting\n");
-                exit(0);
-            }
-            break;
-        }
-
-        if (preserve_wu_files) {
-            retval = 0;
-        } else {
-            retval = wu_delete_files(wu);
-        }
-        if (retval) {
-            new_state = FILE_DELETE_ERROR;
-            log_messages.printf(MSG_CRITICAL,
-                "[WU#%d] file deletion failed: %s\n", wu.id, boincerror(retval)
-            );
-        } else {
-            new_state = FILE_DELETE_DONE;
-        }
-        if (new_state != wu.file_delete_state) {
-            sprintf(buf, "file_delete_state=%d", new_state);
-            retval = wu.update_field(buf);
-            if (retval) {
-                log_messages.printf(MSG_CRITICAL,
-                    "[WU#%d] update failed: %s\n", wu.id, boincerror(retval)
-                );
-            } else {
-                log_messages.printf(MSG_DEBUG,
-                    "[WU#%d] file_delete_state updated\n", wu.id
-                );
-                did_something = true;
-            }
-        } 
-    }
 
     sprintf(buf,
         "where file_delete_state=%d %s limit %d",
@@ -364,26 +344,84 @@ bool do_pass(bool retry_error) {
         if (retval) {
             new_state = FILE_DELETE_ERROR;
             log_messages.printf(MSG_CRITICAL,
-                "[RESULT#%d] file deletion failed: %s\n", result.id, boincerror(retval)
+                "[RESULT#%u] file deletion failed: %s\n", result.id, boincerror(retval)
             );
         } else {
             new_state = FILE_DELETE_DONE;
         }
         if (new_state != result.file_delete_state) {
-            sprintf(buf, "file_delete_state=%d", new_state); 
-            retval = result.update_field(buf);
+            sprintf(buf, "file_delete_state=%d", new_state);
+            if (dry_run) {
+                retval = 0;
+            } else {
+                retval = result.update_field(buf);
+            }
             if (retval) {
                 log_messages.printf(MSG_CRITICAL,
-                    "[RESULT#%d] update failed: %s\n", result.id, boincerror(retval)
+                    "[RESULT#%u] update failed: %s\n", result.id, boincerror(retval)
                 );
             } else {
                 log_messages.printf(MSG_DEBUG,
-                    "[RESULT#%d] file_delete_state updated\n", result.id
+                    "[RESULT#%u] file_delete_state updated\n", result.id
                 );
                 did_something = true;
             }
-        } 
-    } 
+        }
+    }
+
+    if (xml_doc_like) {
+        strcat(clause, " and xml_doc like '");
+        strcat(clause, xml_doc_like);
+        strcat(clause, "'");
+    }
+    sprintf(buf,
+        "where file_delete_state=%d %s limit %d",
+        retry_error?FILE_DELETE_ERROR:FILE_DELETE_READY,
+        clause, WUS_PER_ENUM
+    );
+
+    while (do_input_files) {
+        retval = wu.enumerate(buf);
+        if (retval) {
+            if (retval != ERR_DB_NOT_FOUND) {
+                log_messages.printf(MSG_DEBUG, "DB connection lost, exiting\n");
+                exit(0);
+            }
+            break;
+        }
+
+        if (preserve_wu_files) {
+            retval = 0;
+        } else {
+            retval = wu_delete_files(wu);
+        }
+        if (retval) {
+            new_state = FILE_DELETE_ERROR;
+            log_messages.printf(MSG_CRITICAL,
+                "[WU#%u] file deletion failed: %s\n", wu.id, boincerror(retval)
+            );
+        } else {
+            new_state = FILE_DELETE_DONE;
+        }
+        if (new_state != wu.file_delete_state) {
+            sprintf(buf, "file_delete_state=%d", new_state);
+            if (dry_run) {
+                retval = 0;
+            } else {
+                retval = wu.update_field(buf);
+            }
+            if (retval) {
+                log_messages.printf(MSG_CRITICAL,
+                    "[WU#%u] update failed: %s\n", wu.id, boincerror(retval)
+                );
+            } else {
+                log_messages.printf(MSG_DEBUG,
+                    "[WU#%u] file_delete_state updated\n", wu.id
+                );
+                did_something = true;
+            }
+        }
+    }
 
     return did_something;
 }
@@ -410,7 +448,7 @@ int main(int argc, char** argv) {
     bool one_pass = false;
     int i;
     DB_APP app;
-    
+
     check_stop_daemons();
 
     *app.name='\0';
@@ -424,7 +462,7 @@ int main(int argc, char** argv) {
         } else if (is_arg(argv[i], "preserve_result_files")) {
             preserve_result_files = true;
         } else if (is_arg(argv[i], "app")) {
-            strcpy(app.name, argv[++i]);
+            safe_strcpy(app.name, argv[++i]);
         } else if (is_arg(argv[i], "appid")) {
             if (!argv[++i]) {
                 log_messages.printf(MSG_CRITICAL, "%s requires an argument\n\n", argv[--i]);
@@ -449,6 +487,20 @@ int main(int argc, char** argv) {
             }
             id_modulus   = atoi(argv[++i]);
             id_remainder = atoi(argv[++i]);
+        } else if (is_arg(argv[i], "download_dir")) {
+            if (!argv[++i]) {
+                log_messages.printf(MSG_CRITICAL, "%s requires an argument\n\n", argv[--i]);
+                usage(argv[0]);
+                exit(1);
+            }
+            download_dir = argv[i];
+        } else if (is_arg(argv[i], "xml_doc_like")) {
+            if (!argv[++i]) {
+                log_messages.printf(MSG_CRITICAL, "%s requires an argument\n\n", argv[--i]);
+                usage(argv[0]);
+                exit(1);
+            }
+            xml_doc_like = argv[i];
         } else if (is_arg(argv[i], "dont_delete_antiques")) {
             log_messages.printf(MSG_CRITICAL, "'%s' has no effect, this file deleter does no antique files deletion\n", argv[i]);
         } else if (is_arg(argv[i], "antiques_deletion_dry_run")) {
@@ -461,6 +513,8 @@ int main(int argc, char** argv) {
             log_messages.printf(MSG_CRITICAL, "'%s' has no effect, this file deleter does no antique files deletion\n", argv[i]);
         } else if (is_arg(argv[i], "dont_delete_batches")) {
             dont_delete_batches = true;
+        } else if (is_arg(argv[i], "dry_run")) {
+            dry_run = true;
         } else if (is_arg(argv[i], "delete_antiques_now")) {
             log_messages.printf(MSG_CRITICAL, "'%s' has no effect, this file deleter does no antique files deletion\n", argv[i]);
         } else if (is_arg(argv[i], "input_files_only")) {
@@ -502,6 +556,15 @@ int main(int argc, char** argv) {
         exit(1);
     }
 
+    if (download_dir) {
+        log_messages.printf(MSG_NORMAL,
+            "Overriding download_dir '%s' from project config with command-line '%s'\n",
+            config.download_dir, download_dir
+        );
+    } else {
+        download_dir = config.download_dir;
+    }
+
     log_messages.printf(MSG_NORMAL, "Starting\n");
 
     retval = boinc_db.open(config.db_name, config.db_host, config.db_user, config.db_passwd);
@@ -518,7 +581,7 @@ int main(int argc, char** argv) {
     }
 
     if (*app.name && !appid) {
-      char buf[256];      
+      char buf[256];
       sprintf(buf, "where name='%s'", app.name);
       retval = app.lookup(buf);
       if (retval) {

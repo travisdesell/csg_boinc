@@ -45,14 +45,14 @@ const char* infeasible_string(int code) {
 }
 
 // Return true if the user has set application preferences,
-// and this job is not for a selected app
+// and excluded this app
 //
-bool app_not_selected(WORKUNIT& wu) {
+bool app_not_selected(int appid) {
     unsigned int i;
 
     if (g_wreq->preferred_apps.size() == 0) return false;
     for (i=0; i<g_wreq->preferred_apps.size(); i++) {
-        if (wu.appid == g_wreq->preferred_apps[i].appid) {
+        if (appid == g_wreq->preferred_apps[i].appid) {
             g_wreq->preferred_apps[i].work_available = true;
             return false;
         }
@@ -71,9 +71,9 @@ static inline int check_memory(WORKUNIT& wu) {
         );
         add_no_work_message(message);
 
-        if (config.debug_send) {
+        if (config.debug_send_job) {
             log_messages.printf(MSG_NORMAL,
-                "[send] [WU#%d %s] needs %0.2fMB RAM; [HOST#%d] has %0.2fMB, %0.2fMB usable\n",
+                "[send_job] [WU#%u %s] needs %0.2fMB RAM; [HOST#%d] has %0.2fMB, %0.2fMB usable\n",
                 wu.id, wu.name, wu.rsc_memory_bound/MEGA,
                 g_reply->host.id, g_wreq->ram/MEGA, g_wreq->usable_ram/MEGA
             );
@@ -140,7 +140,7 @@ static inline double get_estimated_delay(BEST_APP_VERSION& bav) {
     if (pt == PROC_TYPE_CPU) {
         return g_request->cpu_estimated_delay;
     }
-    COPROC* cp = g_request->coprocs.type_to_coproc(pt);
+    COPROC* cp = g_request->coprocs.proc_type_to_coproc(pt);
     return cp->estimated_delay;
 }
 
@@ -208,9 +208,10 @@ static inline int check_deadline(
     // (i.e. everyone gets one result, no matter how slow they are)
     //
     if (get_estimated_delay(bav) == 0 && !hard_app(app)) {
-        if (config.debug_send) {
+        if (config.debug_send_job) {
             log_messages.printf(MSG_NORMAL,
-                "[send] est delay 0, skipping deadline check\n"
+                "[send_job] [WU#%u] est delay 0, skipping deadline check\n",
+                wu.id
             );
         }
         return 0;
@@ -230,7 +231,7 @@ static inline int check_deadline(
             return INFEASIBLE_WORKLOAD;
         }
         IP_RESULT candidate("", wu.delay_bound, est_dur);
-        strcpy(candidate.name, wu.name);
+        safe_strcpy(candidate.name, wu.name);
         if (check_candidate(candidate, g_wreq->effective_ncpus, g_request->ip_results)) {
             // it passed the feasibility test,
             // but don't add it to the workload yet;
@@ -246,18 +247,18 @@ static inline int check_deadline(
         double est_report_delay = get_estimated_delay(bav) + ewd;
         double diff = est_report_delay - wu.delay_bound;
         if (diff > 0) {
-            if (config.debug_send) {
+            if (config.debug_send_job) {
                 log_messages.printf(MSG_NORMAL,
-                    "[send] [WU#%d] deadline miss %d > %d\n",
+                    "[send_job] [WU#%u] deadline miss %d > %d\n",
                     wu.id, (int)est_report_delay, wu.delay_bound
                 );
             }
             g_reply->wreq.speed.set_insufficient(diff);
             return INFEASIBLE_CPU;
         } else {
-            if (config.debug_send) {
+            if (config.debug_send_job) {
                 log_messages.printf(MSG_NORMAL,
-                    "[send] [WU#%d] meets deadline: %.2f + %.2f < %d\n",
+                    "[send_job] [WU#%u] meets deadline: %.2f + %.2f < %d\n",
                     wu.id, get_estimated_delay(bav), ewd, wu.delay_bound
                 );
             }
@@ -302,18 +303,18 @@ int wu_is_infeasible_fast(
     //
     if (app_hr_type(app)) {
         if (hr_unknown_class(g_reply->host, app_hr_type(app))) {
-            if (config.debug_send) {
+            if (config.debug_send_job) {
                 log_messages.printf(MSG_NORMAL,
-                    "[send] [HOST#%d] [WU#%d %s] host is of unknown class in HR type %d\n",
+                    "[send_job] [HOST#%d] [WU#%u %s] host is of unknown class in HR type %d\n",
                     g_reply->host.id, wu.id, wu.name, app_hr_type(app)
                 );
             }
             return INFEASIBLE_HR;
         }
         if (already_sent_to_different_hr_class(wu, app)) {
-            if (config.debug_send) {
+            if (config.debug_send_job) {
                 log_messages.printf(MSG_NORMAL,
-                    "[send] [HOST#%d] [WU#%d %s] failed quick HR check: WU is class %d, host is class %d\n",
+                    "[send_job] [HOST#%d] [WU#%u %s] failed quick HR check: WU is class %d, host is class %d\n",
                     g_reply->host.id, wu.id, wu.name, wu.hr_class, hr_class(g_request->host, app_hr_type(app))
                 );
             }
@@ -326,9 +327,9 @@ int wu_is_infeasible_fast(
     if (app.homogeneous_app_version) {
         int avid = wu.app_version_id;
         if (avid && bav.avp->id != avid) {
-            if (config.debug_send) {
+            if (config.debug_send_job) {
                 log_messages.printf(MSG_NORMAL,
-                    "[send] [HOST#%d] [WU#%d %s] failed homogeneous app version check: %d %d\n",
+                    "[send_job] [HOST#%d] [WU#%u %s] failed homogeneous app version check: %d %d\n",
                     g_reply->host.id, wu.id, wu.name, avid, bav.avp->id
                 );
             }
@@ -403,9 +404,9 @@ int slow_check(
             return 1;
         } else {
             if (n>0) {
-                if (config.debug_send) {
+                if (config.debug_send_job) {
                     log_messages.printf(MSG_NORMAL,
-                        "[send] [USER#%d] already has %d result(s) for [WU#%d]\n",
+                        "[send_job] [USER#%d] already has %d result(s) for [WU#%u]\n",
                         g_reply->user.id, n, wu.id
                     );
                 }
@@ -427,9 +428,9 @@ int slow_check(
             return 1;
         } else {
             if (n>0) {
-                if (config.debug_send) {
+                if (config.debug_send_job) {
                     log_messages.printf(MSG_NORMAL,
-                        "[send] [HOST#%d] already has %d result(s) for [WU#%d]\n",
+                        "[send_job] [HOST#%d] already has %d result(s) for [WU#%u]\n",
                         g_reply->host.id, n, wu.id
                     );
                 }
@@ -450,7 +451,7 @@ int slow_check(
         );
         if (retval) {
             log_messages.printf(MSG_CRITICAL,
-                "can't get fields for [WU#%d]: %s\n", db_wu.id, boincerror(retval)
+                "can't get fields for [WU#%u]: %s\n", db_wu.id, boincerror(retval)
             );
             return 1;
         }
@@ -464,9 +465,9 @@ int slow_check(
         if (app_hr_type(*app)) {
             wu.hr_class = vals[0];
             if (already_sent_to_different_hr_class(wu, *app)) {
-                if (config.debug_send) {
+                if (config.debug_send_job) {
                     log_messages.printf(MSG_NORMAL,
-                        "[send] [HOST#%d] [WU#%d %s] is assigned to different HR class\n",
+                        "[send_job] [HOST#%d] [WU#%u %s] is assigned to different HR class\n",
                         g_reply->host.id, wu.id, wu.name
                     );
                 }
@@ -482,9 +483,9 @@ int slow_check(
             int wu_avid = vals[1];
             wu.app_version_id = wu_avid;
             if (wu_avid && wu_avid != bavp->avp->id) {
-                if (config.debug_send) {
+                if (config.debug_send_job) {
                     log_messages.printf(MSG_NORMAL,
-                        "[send] [HOST#%d] [WU#%d %s] is assigned to different app version\n",
+                        "[send_job] [HOST#%d] [WU#%u %s] is assigned to different app version\n",
                         g_reply->host.id, wu.id, wu.name
                     );
                 }
@@ -503,21 +504,21 @@ bool result_still_sendable(DB_RESULT& result, WORKUNIT& wu) {
     int retval = result.lookup_id(result.id);
     if (retval) {
         log_messages.printf(MSG_CRITICAL,
-            "[RESULT#%d] result.lookup_id() failed: %s\n",
+            "[RESULT#%u] result.lookup_id() failed: %s\n",
             result.id, boincerror(retval)
         );
         return false;
     }
     if (result.server_state != RESULT_SERVER_STATE_UNSENT) {
         log_messages.printf(MSG_NORMAL,
-            "[RESULT#%d] expected to be unsent; instead, state is %d\n",
+            "[RESULT#%u] expected to be unsent; instead, state is %d\n",
             result.id, result.server_state
         );
         return false;
     }
     if (result.workunitid != wu.id) {
         log_messages.printf(MSG_CRITICAL,
-            "[RESULT#%d] wrong WU ID: wanted %d, got %d\n",
+            "[RESULT#%u] wrong WU ID: wanted %d, got %d\n",
             result.id, wu.id, result.workunitid
         );
         return false;

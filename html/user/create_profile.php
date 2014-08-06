@@ -21,6 +21,8 @@
 require_once("../inc/profile.inc");
 require_once("../inc/akismet.inc");
 
+if (DISABLE_PROFILES) error_page("Profiles are disabled");
+
 check_get_args(array());
 
 // output a select form item with the given name,
@@ -109,7 +111,7 @@ function show_submit() {
         table_row(
             tra("Please enter the words shown in the image.")
             ."<br>\n"
-            .recaptcha_get_html($publickey)
+            .recaptcha_get_html($publickey, null, is_https())
         );
     }
     table_row("<p><input type=\"submit\" value=\"".tra("Create/edit profile") ."\" name=\"submit\">");

@@ -68,10 +68,16 @@ IMPLEMENT_DYNAMIC_CLASS(CViewTransfers, CBOINCBaseView)
 BEGIN_EVENT_TABLE (CViewTransfers, CBOINCBaseView)
     EVT_BUTTON(ID_TASK_TRANSFERS_RETRYNOW, CViewTransfers::OnTransfersRetryNow)
     EVT_BUTTON(ID_TASK_TRANSFERS_ABORT, CViewTransfers::OnTransfersAbort)
-    EVT_LIST_ITEM_SELECTED(ID_LIST_TRANSFERSVIEW, CViewTransfers::OnListSelected)
-    EVT_LIST_ITEM_DESELECTED(ID_LIST_TRANSFERSVIEW, CViewTransfers::OnListDeselected)
-    EVT_LIST_COL_CLICK(ID_LIST_TRANSFERSVIEW, CViewTransfers::OnColClick)
+// We currently handle EVT_LIST_CACHE_HINT on Windows or 
+// EVT_CHECK_SELECTION_CHANGED on Mac & Linux instead of EVT_LIST_ITEM_SELECTED
+// or EVT_LIST_ITEM_DESELECTED.  See CBOINCBaseView::OnCacheHint() for info.
+#if USE_LIST_CACHE_HINT
     EVT_LIST_CACHE_HINT(ID_LIST_TRANSFERSVIEW, CViewTransfers::OnCacheHint)
+#else
+	EVT_CHECK_SELECTION_CHANGED(CViewTransfers::OnCheckSelectionChanged)
+#endif
+    EVT_LIST_COL_CLICK(ID_LIST_TRANSFERSVIEW, CViewTransfers::OnColClick)
+    EVT_LIST_COL_END_DRAG(ID_LIST_TRANSFERSVIEW, CViewTransfers::OnColResize)
 END_EVENT_TABLE ()
 
 
@@ -109,9 +115,9 @@ static bool CompareViewTransferItems(int iRowIndex1, int iRowIndex2) {
         }
         break;
     case COLUMN_SIZE:
-        if (transfer1->m_fBytesXferred < transfer2->m_fBytesXferred) {
+        if (transfer1->m_fTotalBytes < transfer2->m_fTotalBytes) {
             result = -1;
-        } else if (transfer1->m_fBytesXferred > transfer2->m_fBytesXferred) {
+        } else if (transfer1->m_fTotalBytes > transfer2->m_fTotalBytes) {
             result = 1;
         }
         break;
@@ -144,7 +150,7 @@ CViewTransfers::CViewTransfers()
 
 
 CViewTransfers::CViewTransfers(wxNotebook* pNotebook) :
-    CBOINCBaseView(pNotebook, ID_TASK_TRANSFERSVIEW, DEFAULT_TASK_FLAGS, ID_LIST_TRANSFERSVIEW, DEFAULT_LIST_MULTI_SEL_FLAGS)
+    CBOINCBaseView(pNotebook, ID_TASK_TRANSFERSVIEW, DEFAULT_TASK_FLAGS, ID_LIST_TRANSFERSVIEW, DEFAULT_LIST_FLAGS)
 {
 	CTaskItemGroup* pGroup = NULL;
 	CTaskItem*      pItem = NULL;
@@ -361,6 +367,16 @@ void CViewTransfers::OnTransfersAbort( wxCommandEvent& WXUNUSED(event) ) {
     pFrame->FireRefreshView();
 
     wxLogTrace(wxT("Function Start/End"), wxT("CViewTransfers::OnTransfersAbort - Function End"));
+}
+
+
+void CViewTransfers::OnColResize( wxListEvent& ) {
+    // Register the new column widths immediately
+    CAdvancedFrame* pFrame = wxDynamicCast(GetParent()->GetParent()->GetParent(), CAdvancedFrame);
+
+    wxASSERT(pFrame);
+    wxASSERT(wxDynamicCast(pFrame, CAdvancedFrame));
+    pFrame->SaveState();
 }
 
 

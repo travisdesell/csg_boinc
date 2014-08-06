@@ -19,6 +19,7 @@
 include_once("../inc/db.inc");
 include_once("../inc/util.inc");
 include_once("../inc/prefs.inc");
+include_once("../inc/prefs_project.inc");
 
 $user = get_logged_in_user();
 
@@ -83,7 +84,7 @@ if ($action) {
 
             if (!$venue) {
                 venue_parse_form($user);
-                venue_update($user);
+                $user->update("venue='$user->venue'");
             }
             Header("Location: prefs.php?subset=$subset&updated=1$c");
         }

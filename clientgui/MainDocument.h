@@ -119,7 +119,7 @@ public:
     // Global
     //
 private:
-
+    char                        m_szLanguage[256];
     wxDateTime                  m_dtCachedCCStatusTimestamp;
     bool                        m_bClientStartCheckCompleted;
 
@@ -301,7 +301,6 @@ public:
 
     void                        UpdateUnreadNoticeState();
     int                         ResetNoticeState();
-    bool                        LocalizeNoticeText(wxString& strMessage, bool bSanitize = false, bool bClean = false);
 
 
     //
@@ -412,6 +411,10 @@ public:
 extern wxString suspend_reason_wxstring(int reason);
 extern wxString result_description(RESULT*, bool show_resources=true);
 extern wxString process_client_message(const char*);
+extern void localize(wxString& strMessage);
+extern void eol_to_br(wxString& strMessage);
+extern void remove_eols(wxString& strMessage);
+extern void https_to_http(wxString& strMessage);
 
 #ifdef SANDBOX
 #define BOINC_MASTER_GROUP_NAME "boinc_master"

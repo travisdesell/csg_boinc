@@ -45,6 +45,8 @@
 #include "res/freebsdicon.xpm"
 #include "res/atiicon.xpm"
 #include "res/nvidiaicon.xpm"
+#include "res/androidicon.xpm"
+#include "res/virtualboxicon.xpm"
 #include "res/blankicon.xpm"
 
 
@@ -63,6 +65,8 @@ class CProjectInfo : public wxObject
         m_bProjectSupportsFreeBSD = false;
         m_bProjectSupportsCUDA = false;
         m_bProjectSupportsCAL = false;
+        m_bProjectSupportsAndroid = false;
+        m_bProjectSupportsVirtualBox = false;
     }
 
 public:
@@ -79,6 +83,8 @@ public:
     bool m_bProjectSupportsFreeBSD;
     bool m_bProjectSupportsCUDA;
     bool m_bProjectSupportsCAL;
+    bool m_bProjectSupportsAndroid;
+    bool m_bProjectSupportsVirtualBox;
 };
 
 IMPLEMENT_DYNAMIC_CLASS( CProjectInfo, wxObject )
@@ -164,6 +170,8 @@ bool CProjectInfoPage::Create( CBOINCBaseWizard* parent )
     m_pProjectDetailsSupportedPlatformFreeBSDCtrl = NULL;
     m_pProjectDetailsSupportedPlatformATICtrl = NULL;
     m_pProjectDetailsSupportedPlatformNvidiaCtrl = NULL;
+    m_pProjectDetailsSupportedPlatformAndroidCtrl = NULL;
+    m_pProjectDetailsSupportedPlatformVirtualBoxCtrl = NULL;
     m_pProjectDetailsSupportedPlatformBlankCtrl = NULL;
     m_pProjectURLStaticCtrl = NULL;
     m_pProjectURLCtrl = NULL;
@@ -215,15 +223,15 @@ void CProjectInfoPage::CreateControls()
 
     itemBoxSizer24->Add(5, 5, 0, wxALIGN_LEFT|wxALL, 5);
 
-    wxFlexGridSizer* itemFlexGridSizer4 = new wxFlexGridSizer(1, 1, 0, 0);
+    wxFlexGridSizer* itemFlexGridSizer4 = new wxFlexGridSizer(1, 0, 0);
     itemFlexGridSizer4->AddGrowableRow(0);
     itemFlexGridSizer4->AddGrowableCol(0);
     itemBoxSizer24->Add(itemFlexGridSizer4, 0, wxGROW|wxALL, 0);
 
-    wxFlexGridSizer* itemFlexGridSizer6 = new wxFlexGridSizer(0, 2, 0, 0);
+    wxFlexGridSizer* itemFlexGridSizer6 = new wxFlexGridSizer(2, 2, 0, 0);
     itemFlexGridSizer6->AddGrowableRow(1);
     itemFlexGridSizer6->AddGrowableCol(1);
-    itemFlexGridSizer4->Add(itemFlexGridSizer6, 0, wxGROW|wxGROW|wxALL, 0);
+    itemFlexGridSizer4->Add(itemFlexGridSizer6, 0, wxGROW|wxALL, 0);
 
     wxBoxSizer* itemBoxSizer7 = new wxBoxSizer(wxVERTICAL);
     itemFlexGridSizer6->Add(itemBoxSizer7, 0, wxALIGN_LEFT|wxALIGN_TOP, 0);
@@ -232,13 +240,17 @@ void CProjectInfoPage::CreateControls()
     itemBoxSizer7->Add(m_pProjectCategoriesStaticCtrl, 0, wxALIGN_LEFT|wxRIGHT|wxBOTTOM, 5);
 
     wxArrayString m_pProjectCategoriesCtrlStrings;
-    m_pProjectCategoriesCtrl = new wxComboBox( itemWizardPage23, ID_CATEGORIES, wxT(""), wxDefaultPosition, wxSize(LISTBOXWIDTH, -1), m_pProjectCategoriesCtrlStrings, wxCB_READONLY|wxCB_SORT );
+    m_pProjectCategoriesCtrl = new wxComboBox( itemWizardPage23, ID_CATEGORIES, wxT(""), wxDefaultPosition, wxSize(LISTBOXWIDTH, -1), m_pProjectCategoriesCtrlStrings, wxCB_READONLY
+#ifndef __WXMAC__   // wxCB_SORT is not available in wxCocoa 2.9.5
+    |wxCB_SORT
+#endif
+     );
     itemBoxSizer7->Add(m_pProjectCategoriesCtrl, 0, wxGROW|wxLEFT|wxRIGHT, 5);
 
     m_pProjectsStaticCtrl = new wxStaticText( itemWizardPage23, wxID_STATIC, wxT(""), wxDefaultPosition, wxDefaultSize, 0 );
     itemBoxSizer7->Add(m_pProjectsStaticCtrl, 0, wxALIGN_LEFT|wxTOP|wxRIGHT|wxBOTTOM, 5);
 
-    wxFlexGridSizer* itemFlexGridSizer11 = new wxFlexGridSizer(0, 1, 0, 0);
+    wxFlexGridSizer* itemFlexGridSizer11 = new wxFlexGridSizer(1, 0, 0);
     itemFlexGridSizer11->AddGrowableRow(0);
     itemFlexGridSizer11->AddGrowableCol(0);
     itemBoxSizer7->Add(itemFlexGridSizer11, 0, wxGROW|wxALL, 0);
@@ -254,7 +266,7 @@ void CProjectInfoPage::CreateControls()
     m_pProjectDetailsDescriptionCtrl = new wxTextCtrl( itemWizardPage23, ID_PROJECTDESCRIPTION, wxT(""), wxDefaultPosition, wxSize(DESCRIPTIONSWIDTH, 100), wxTE_MULTILINE|wxTE_READONLY );
     itemStaticBoxSizer13->Add(m_pProjectDetailsDescriptionCtrl, 0, wxGROW|wxLEFT|wxTOP|wxBOTTOM, 5);
 
-    wxFlexGridSizer* itemFlexGridSizer16 = new wxFlexGridSizer(0, 2, 0, 0);
+    wxFlexGridSizer* itemFlexGridSizer16 = new wxFlexGridSizer(2, 0, 0);
     itemFlexGridSizer16->AddGrowableCol(1);
     itemStaticBoxSizer13->Add(itemFlexGridSizer16, 0, wxGROW|wxALL, 0);
 
@@ -264,7 +276,7 @@ void CProjectInfoPage::CreateControls()
     m_pProjectDetailsResearchAreaCtrl = new wxStaticText( itemWizardPage23, wxID_STATIC, wxEmptyString, wxDefaultPosition, wxDefaultSize, 0 );
     itemFlexGridSizer16->Add(m_pProjectDetailsResearchAreaCtrl, 0, wxALIGN_CENTER_VERTICAL|wxLEFT|wxRIGHT, 5);
 
-    wxFlexGridSizer* itemFlexGridSizer19 = new wxFlexGridSizer(0, 2, 0, 0);
+    wxFlexGridSizer* itemFlexGridSizer19 = new wxFlexGridSizer(2, 0, 0);
     itemFlexGridSizer19->AddGrowableCol(1);
     itemStaticBoxSizer13->Add(itemFlexGridSizer19, 0, wxGROW|wxALL, 0);
 
@@ -274,7 +286,7 @@ void CProjectInfoPage::CreateControls()
     m_pProjectDetailsOrganizationCtrl = new wxStaticText( itemWizardPage23, wxID_STATIC, wxEmptyString, wxDefaultPosition, wxDefaultSize, 0 );
     itemFlexGridSizer19->Add(m_pProjectDetailsOrganizationCtrl, 0, wxALIGN_CENTER_VERTICAL|wxLEFT|wxRIGHT, 5);
 
-    wxFlexGridSizer* itemFlexGridSizer20 = new wxFlexGridSizer(0, 2, 0, 0);
+    wxFlexGridSizer* itemFlexGridSizer20 = new wxFlexGridSizer(2, 0, 0);
     itemFlexGridSizer20->AddGrowableCol(1);
     itemStaticBoxSizer13->Add(itemFlexGridSizer20, 0, wxGROW|wxALL, 0);
 
@@ -313,10 +325,16 @@ void CProjectInfoPage::CreateControls()
     m_pProjectDetailsSupportedPlatformNvidiaCtrl = new wxStaticBitmap( itemWizardPage23, wxID_STATIC, GetBitmapResource(wxT("nvidiaicon.xpm")), wxDefaultPosition, wxSize(16,16), 0 );
     itemBoxSizer26->Add(m_pProjectDetailsSupportedPlatformNvidiaCtrl, 0, wxALIGN_CENTER_VERTICAL|wxLEFT|wxRIGHT|wxTOP, 5);
 
+    m_pProjectDetailsSupportedPlatformAndroidCtrl = new wxStaticBitmap( itemWizardPage23, wxID_STATIC, GetBitmapResource(wxT("androidicon.xpm")), wxDefaultPosition, wxSize(16,16), 0 );
+    itemBoxSizer26->Add(m_pProjectDetailsSupportedPlatformAndroidCtrl, 0, wxALIGN_CENTER_VERTICAL|wxLEFT|wxRIGHT|wxTOP, 5);
+
+    m_pProjectDetailsSupportedPlatformVirtualBoxCtrl = new wxStaticBitmap( itemWizardPage23, wxID_STATIC, GetBitmapResource(wxT("virtualboxicon.xpm")), wxDefaultPosition, wxSize(16,16), 0 );
+    itemBoxSizer26->Add(m_pProjectDetailsSupportedPlatformVirtualBoxCtrl, 0, wxALIGN_CENTER_VERTICAL|wxLEFT|wxRIGHT|wxTOP, 5);
+
     m_pProjectDetailsSupportedPlatformBlankCtrl = new wxStaticBitmap( itemWizardPage23, wxID_STATIC, GetBitmapResource(wxT("blankicon.xpm")), wxDefaultPosition, wxSize(16,16), 0 );
     itemBoxSizer26->Add(m_pProjectDetailsSupportedPlatformBlankCtrl, 0, wxALIGN_CENTER_VERTICAL|wxLEFT|wxRIGHT|wxTOP, 5);
 
-    wxFlexGridSizer* itemFlexGridSizer33 = new wxFlexGridSizer(0, 2, 0, 0);
+    wxFlexGridSizer* itemFlexGridSizer33 = new wxFlexGridSizer(2, 0, 0);
     itemFlexGridSizer33->AddGrowableCol(1);
     itemFlexGridSizer4->Add(itemFlexGridSizer33, 0, wxGROW|wxALIGN_CENTER_VERTICAL|wxALL, 0);
 
@@ -324,11 +342,9 @@ void CProjectInfoPage::CreateControls()
     itemFlexGridSizer33->Add(m_pProjectURLStaticCtrl, 0, wxALIGN_LEFT|wxALIGN_CENTER_VERTICAL|wxALL, 5);
 
     m_pProjectURLCtrl = new wxTextCtrl( itemWizardPage23, ID_PROJECTURLCTRL, wxEmptyString, wxDefaultPosition, wxDefaultSize, 0 );
-    itemFlexGridSizer33->Add(m_pProjectURLCtrl, 1, wxGROW|wxALIGN_CENTER_VERTICAL|wxALL, 5);
+    itemFlexGridSizer33->Add(m_pProjectURLCtrl, 0, wxGROW|wxALIGN_CENTER_VERTICAL|wxALL, 5);
 
-#ifdef __WXMAC__
-    itemFlexGridSizer33->Add(0, 20, 0);
-#endif
+    itemFlexGridSizer33->Add(0, 10, 0);
 
     // Set validators
     m_pProjectURLCtrl->SetValidator( CValidateURL( & m_strProjectURL ) );
@@ -411,6 +427,16 @@ wxBitmap CProjectInfoPage::GetBitmapResource( const wxString& name )
         wxBitmap bitmap(nvidiaicon_xpm);
         return bitmap;
     }
+    else if (name == wxT("androidicon.xpm"))
+    {
+        wxBitmap bitmap(androidicon_xpm);
+        return bitmap;
+    }
+    else if (name == wxT("virtualboxicon.xpm"))
+    {
+        wxBitmap bitmap(virtualboxicon_xpm);
+        return bitmap;
+    }
     else if (name == wxT("blankicon.xpm"))
     {
         wxBitmap bitmap(blankicon_xpm);
@@ -490,6 +516,7 @@ void CProjectInfoPage::OnProjectSelected( wxCommandEvent& WXUNUSED(event) ) {
         // Change all occurrences of "<sup>n</sup>" to "^n"
         desc.Replace(wxT("<sup>"), wxT("^"), true);
         desc.Replace(wxT("</sup>"), wxT(""), true);
+        desc.Replace(wxT("&lt;"), wxT("<"), true);
 
         m_pProjectDetailsDescriptionCtrl->SetValue(desc);
         m_pProjectDetailsURLCtrl->SetLabel(strURL);
@@ -503,12 +530,16 @@ void CProjectInfoPage::OnProjectSelected( wxCommandEvent& WXUNUSED(event) ) {
         m_pProjectDetailsSupportedPlatformFreeBSDCtrl->Hide();
         m_pProjectDetailsSupportedPlatformATICtrl->Hide();
         m_pProjectDetailsSupportedPlatformNvidiaCtrl->Hide();
+        m_pProjectDetailsSupportedPlatformAndroidCtrl->Hide();
+        m_pProjectDetailsSupportedPlatformVirtualBoxCtrl->Hide();
         if (pProjectInfo->m_bProjectSupportsWindows) m_pProjectDetailsSupportedPlatformWindowsCtrl->Show();
         if (pProjectInfo->m_bProjectSupportsMac) m_pProjectDetailsSupportedPlatformMacCtrl->Show();
         if (pProjectInfo->m_bProjectSupportsLinux) m_pProjectDetailsSupportedPlatformLinuxCtrl->Show();
         if (pProjectInfo->m_bProjectSupportsFreeBSD) m_pProjectDetailsSupportedPlatformFreeBSDCtrl->Show();
         if (pProjectInfo->m_bProjectSupportsCAL) m_pProjectDetailsSupportedPlatformATICtrl->Show();
         if (pProjectInfo->m_bProjectSupportsCUDA) m_pProjectDetailsSupportedPlatformNvidiaCtrl->Show();
+        if (pProjectInfo->m_bProjectSupportsAndroid) m_pProjectDetailsSupportedPlatformAndroidCtrl->Show();
+        if (pProjectInfo->m_bProjectSupportsVirtualBox) m_pProjectDetailsSupportedPlatformVirtualBoxCtrl->Show();
 
         // Populate non-control data for use in other places of the wizard
         SetProjectURL( pProjectInfo->m_strURL );
@@ -575,6 +606,8 @@ void CProjectInfoPage::OnPageChanged( wxWizardExEvent& event ) {
     wxASSERT(m_pProjectDetailsSupportedPlatformFreeBSDCtrl);
     wxASSERT(m_pProjectDetailsSupportedPlatformATICtrl);
     wxASSERT(m_pProjectDetailsSupportedPlatformNvidiaCtrl);
+    wxASSERT(m_pProjectDetailsSupportedPlatformAndroidCtrl);
+    wxASSERT(m_pProjectDetailsSupportedPlatformVirtualBoxCtrl);
     wxASSERT(m_pProjectURLStaticCtrl);
     wxASSERT(m_pProjectURLCtrl);
 
@@ -670,12 +703,6 @@ void CProjectInfoPage::OnPageChanged( wxWizardExEvent& event ) {
 
             // Can the core client support a platform that this project supports?
             //
-            // NOTE: if the platform entry contains a modifier such as [cuda] or [ati], 
-            // that capability is required.  If a project offers both a cuda application 
-            // and a CPU-only application for an operating system, it must have two 
-            // separate platform entries for that OS, one with [cuda] and one without.
-            // Likewise for ati and mt.
-            //
             for (j = 0;j < aClientPlatforms.size(); j++) {
                 wxString strClientPlatform = aClientPlatforms[j];
                 for (k = 0;k < aProjectPlatforms.size(); k++) {
@@ -698,6 +725,10 @@ void CProjectInfoPage::OnPageChanged( wxWizardExEvent& event ) {
                         pProjectInfo->m_bProjectSupportsFreeBSD = true;
                     }
                     
+                    if (strProjectPlatform.Find(_T("android")) != wxNOT_FOUND) {
+                        pProjectInfo->m_bProjectSupportsAndroid = true;
+                    }
+
                     if (strProjectPlatform.Find(_T("[cuda")) != wxNOT_FOUND) {
                         pProjectInfo->m_bProjectSupportsCUDA = true;
 						if (!pDoc->state.host_info.coprocs.have_nvidia()) continue;
@@ -706,6 +737,10 @@ void CProjectInfoPage::OnPageChanged( wxWizardExEvent& event ) {
                     if (strProjectPlatform.Find(_T("[ati")) != wxNOT_FOUND) {
                         pProjectInfo->m_bProjectSupportsCAL = true;
 						if (!pDoc->state.host_info.coprocs.have_ati()) continue;
+                    }
+
+                    if (strProjectPlatform.Find(_T("[vbox")) != wxNOT_FOUND) {
+                        pProjectInfo->m_bProjectSupportsVirtualBox = true;
                     }
 
                     if (strClientPlatform == strRootProjectPlatform) {
@@ -722,20 +757,24 @@ void CProjectInfoPage::OnPageChanged( wxWizardExEvent& event ) {
 
             wxLogTrace(
                 wxT("Function Status"),
-                wxT("CProjectInfoPage::OnPageChanged - Windows: '%d', Mac: '%d', Linux: '%d', FreeBSD: '%d', Nvidia: '%d', ATI: '%d', Platform: '%d'"),
+                wxT("CProjectInfoPage::OnPageChanged - Windows: '%d', Mac: '%d', Linux: '%d', FreeBSD: '%d', Nvidia: '%d', ATI: '%d', Android: '%d',  VirtualBox: '%d', Platform: '%d'"),
                 pProjectInfo->m_bProjectSupportsWindows,
                 pProjectInfo->m_bProjectSupportsMac,
                 pProjectInfo->m_bProjectSupportsLinux,
                 pProjectInfo->m_bProjectSupportsFreeBSD,
                 pProjectInfo->m_bProjectSupportsCUDA,
                 pProjectInfo->m_bProjectSupportsCAL,
+                pProjectInfo->m_bProjectSupportsAndroid,
+                pProjectInfo->m_bProjectSupportsVirtualBox,
                 pProjectInfo->m_bSupportedPlatformFound
             );
         }
 
 
         // Populate the category combo box
-        m_pProjectCategoriesCtrl->Clear();
+        if (!m_pProjectCategoriesCtrl->IsListEmpty()) {
+            m_pProjectCategoriesCtrl->Clear();
+        }
         m_pProjectCategoriesCtrl->Append(_("All"));
         for (i=0; i<aCategories.size(); i++) {
             m_pProjectCategoriesCtrl->Append(aCategories[i]);
@@ -810,7 +849,7 @@ void CProjectInfoPage::OnPageChanging( wxWizardExEvent& event ) {
                     wxGetApp().SafeMessageBox(
                         _("You already added this project. Please choose a different project."),
                         strTitle,
-                        wxCENTER | wxICON_INFORMATION
+                        wxCENTER | wxOK | wxICON_INFORMATION
                     );
 
                     // We are already attached to that project, 

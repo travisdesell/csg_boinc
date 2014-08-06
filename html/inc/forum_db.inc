@@ -126,6 +126,10 @@ class BoincPost {
         $db = BoincDb::get();
         return $db->delete($this, 'post');
     }
+    static function delete_aux($clause) {
+        $db = BoincDb::get();
+        return $db->delete_aux('post', $clause);
+    }
 }
 
 class BoincForumPrefs {
@@ -167,6 +171,10 @@ class BoincForumPrefs {
         $db = BoincDb::get();
         return $db->delete_aux('forum_preferences', "userid=$this->userid");
     }
+    static function enum($clause=null) {
+        $db = BoincDb::get();
+        return $db->enum('forum_preferences', 'BoincForumPrefs', $clause);
+    }
 }
 
 class BoincForumLogging {
@@ -190,26 +198,27 @@ class BoincForumLogging {
         }
         self::$cache[$threadid] = $x;
     }
-    static function cleanup() {
-        // TODO - clean this up
-
+    static function delete_aux($clause) {
         $db = BoincDb::get();
-        $sql = "SELECT timestamp FROM ".$db->db_name.".forum_logging where userid=0 and threadid=0";
-        $result=$db->do_query($sql);
-        if (mysql_num_rows($result)>0) {
-            $data=mysql_fetch_object($result);
-            if ($data->timestamp<time()-MAX_FORUM_LOGGING_TIME){
-                $sql = "DELETE FROM ".$db->db_name.".forum_logging where timestamp<'".(time()-MAX_FORUM_LOGGING_TIME)."' and userid != 0";
-                $db->do_query($sql);
-                echo mysql_error();
-                $sql = "REPLACE INTO ".$db->db_name.".forum_logging set userid=0, threadid=0, timestamp='".time()."'";
-                $db->do_query($sql);
+        return $db->delete_aux('forum_logging', $clause);
+    }
+    static function cleanup() {
+        // Every 28 days, delete records older than 28 days.
+        // Keep track of the last time we did this in a special record
+        // with userid = threadid = 0.
+        // This gets called from forum_index.php
+        // (i.e. each time the forum main page is loaded).
+        //
+        $fl = BoincForumLogging::lookup(0, 0);
+        if ($fl) {
+            if ($fl->timestamp<time()-MAX_FORUM_LOGGING_TIME){
+                BoincForumLogging::delete_aux("timestamp<'".(time()-MAX_FORUM_LOGGING_TIME)."' and userid != 0");
+                BoincForumLogging::replace(0, 0, time());
             }
         } else {
-            //No cleanup timestamp found, make one:
-            $sql = "INSERT INTO ".$db->db_name.".forum_logging set userid=0, threadid=0, timestamp=0";
-            $db->do_query($sql);
-            echo mysql_error();
+            // No cleanup timestamp found, make one
+            //
+            BoincForumLogging::replace(0, 0, 0);
         }
     }
 }
@@ -295,7 +304,7 @@ class BoincNotify {
         $db = BoincDb::get();
         return $db->delete($this, 'notify');
     }
-    function delete_aux($clause) {
+    static function delete_aux($clause) {
         $db = BoincDb::get();
         $db->delete_aux('notify', $clause);
     }

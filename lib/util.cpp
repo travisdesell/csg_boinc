@@ -425,6 +425,7 @@ int run_program(
             }
         }
     }
+    if (process_info.hThread) CloseHandle(process_info.hThread);
     id = process_info.hProcess;
     return 0;
 }
@@ -460,27 +461,39 @@ int run_program(
 #endif
 
 #ifdef _WIN32
-void kill_program(HANDLE pid) {
-    TerminateProcess(pid, 0);
+int kill_program(int pid, int exit_code) {
+    int retval;
+
+    HANDLE h = OpenProcess(PROCESS_TERMINATE, false, pid);
+    if (h == NULL) return ERR_NOT_FOUND;
+    if (TerminateProcess(h, exit_code)) {
+        retval = 0;
+    } else {
+        retval = ERR_KILL;
+    }
+    CloseHandle(h);
+    return retval;
 }
+
+int kill_program(HANDLE pid) {
+    if (TerminateProcess(pid, 0)) return 0;
+    return ERR_KILL;
+}
+
 #else
-void kill_program(int pid) {
-    kill(pid, SIGKILL);
+int kill_program(int pid) {
+    if (kill(pid, SIGKILL)) {
+        return ERR_KILL;
+    }
+    return 0;
 }
 #endif
 
 #ifdef _WIN32
 int get_exit_status(HANDLE pid_handle) {
     unsigned long status=1;
-    while (1) {
-        if (GetExitCodeProcess(pid_handle, &status)) {
-            if (status == STILL_ACTIVE) {
-                boinc_sleep(1);
-            } else {
-                break;
-            }
-        }
-    }
+    WaitForSingleObject(pid_handle, INFINITE);
+    GetExitCodeProcess(pid_handle, &status);
     return (int) status;
 }
 bool process_exists(HANDLE h) {
@@ -490,7 +503,6 @@ bool process_exists(HANDLE h) {
     }
     return false;
 }
-
 #else
 int get_exit_status(int pid) {
     int status;
@@ -498,9 +510,8 @@ int get_exit_status(int pid) {
     return status;
 }
 bool process_exists(int pid) {
-    int p = waitpid(pid, 0, WNOHANG);
-    if (p == pid) return false;     // process has exited
-    if (p == -1) return false;      // PID doesn't exist
+    int retval = kill(pid, 0);
+    if (retval == -1 && errno == ESRCH) return false;
     return true;
 }
 #endif
@@ -511,9 +522,7 @@ static int get_client_mutex(const char*) {
     
     // Global mutex on Win2k and later
     //
-    if (IsWindows2000Compatible()) {
-        strcpy(buf, "Global\\");
-    }
+    strcpy(buf, "Global\\");
     strcat(buf, RUN_MUTEX);
 
     HANDLE h = CreateMutexA(NULL, true, buf);
@@ -551,7 +560,6 @@ int wait_client_mutex(const char* dir, double timeout) {
 bool boinc_is_finite(double x) {
 #if defined (HPUX_SOURCE)
     return _Isfinite(x);
-    return false;
 #else
     return finite(x) != 0;
 #endif

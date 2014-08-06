@@ -21,9 +21,6 @@
 #endif
 
 #include "stdwx.h"
-#ifdef __WXMAC__
-#include "MacAccessiblity.h"
-#endif
 #include "diagnostics.h"
 #include "str_util.h"
 #include "mfile.h"
@@ -42,7 +39,6 @@
 #include "version.h"
 
 #include "sg_BoincSimpleFrame.h"
-#include "sg_CustomControls.h"
 #include "sg_TaskPanel.h"
 #include "sg_ProjectPanel.h"
 #include "sg_DlgMessages.h"
@@ -50,9 +46,18 @@
 #include "DlgEventLog.h"
 #include "DlgAbout.h"
 #include "DlgOptions.h"
+#include "DlgDiagnosticLogFlags.h"
+
+
+#ifdef __WXMAC__
+#include "util.h"
+
+static int compareOSVersionTo(int toMajor, int toMinor);
+#endif
 
 // Workaround for Linux refresh problem
-#if (defined(__WXMSW__) || defined(__WXMAC__))
+// and Mac keyboard navigation problem
+#ifdef __WXMSW__
 #define REFRESH_WAIT 0
 #else
 #define REFRESH_WAIT 1
@@ -71,11 +76,16 @@ BEGIN_EVENT_TABLE(CSimpleFrame, CBOINCBaseFrame)
     EVT_FRAME_NOTIFICATION(CSimpleFrame::OnNotification)
     EVT_MENU(ID_PREFERENCES, CSimpleFrame::OnPreferences)
     EVT_MENU(ID_SGOPTIONS, CSimpleFrame::OnOptions)
+	EVT_MENU(ID_SGDIAGNOSTICLOGFLAGS, CSimpleFrame::OnDiagnosticLogFlags)
     EVT_MENU(ID_HELPBOINC, CSimpleFrame::OnHelpBOINC)
     EVT_MENU(ID_HELPBOINCMANAGER, CSimpleFrame::OnHelpBOINC)
     EVT_MENU(ID_HELPBOINCWEBSITE, CSimpleFrame::OnHelpBOINC)
     EVT_MENU(wxID_ABOUT, CSimpleFrame::OnHelpAbout)
 	EVT_MENU(ID_EVENTLOG, CSimpleFrame::OnEventLog)
+    EVT_MOVE(CSimpleFrame::OnMove)
+#ifdef __WXMAC__
+	EVT_MENU(wxID_PREFERENCES, CSimpleFrame::OnPreferences)
+#endif
 END_EVENT_TABLE()
 
 
@@ -85,17 +95,14 @@ CSimpleFrame::CSimpleFrame() {
 }
 
 
-CSimpleFrame::CSimpleFrame(wxString title, wxIcon* icon, wxIcon* icon32, wxPoint position, wxSize size) : 
+CSimpleFrame::CSimpleFrame(wxString title, wxIconBundle* icons, wxPoint position, wxSize size) : 
     CBOINCBaseFrame((wxFrame *)NULL, ID_SIMPLEFRAME, title, position, size,
                     wxMINIMIZE_BOX | wxSYSTEM_MENU | wxCAPTION | wxCLOSE_BOX | wxCLIP_CHILDREN)
 {
     wxLogTrace(wxT("Function Start/End"), wxT("CSimpleFrame:: - Overloaded Constructor Function Begin"));
 
     // Initialize Application
-    wxIconBundle icons;
-    icons.AddIcon(*icon);
-    icons.AddIcon(*icon32);
-    SetIcons(icons);
+    SetIcons(*icons);
     
     CSkinAdvanced*     pSkinAdvanced = wxGetApp().GetSkinManager()->GetAdvanced();
     wxString           strMenuName;
@@ -119,6 +126,28 @@ CSimpleFrame::CSimpleFrame(wxString title, wxIcon* icon, wxIcon* icon32, wxPoint
         strMenuName,
         strMenuDescription
     );
+
+    strMenuDescription.Printf(
+        _("Exit %s"),
+        pSkinAdvanced->GetApplicationName().c_str()
+    );
+
+    strMenuName.Printf(
+        _("Exit %s"),
+        pSkinAdvanced->GetApplicationName().c_str()
+    );
+
+    menuFile->Append(
+        wxID_EXIT,
+        strMenuName,
+        strMenuDescription
+    );
+
+#ifdef __WXMAC__
+    menuFile->Append(
+        wxID_PREFERENCES
+    );
+#endif
 
     // Skins submenu
     m_pSubmenuSkins = new wxMenu;
@@ -208,7 +237,7 @@ CSimpleFrame::CSimpleFrame(wxString title, wxIcon* icon, wxIcon* icon32, wxPoint
     // %s is the project name
     //    i.e. 'BOINC', 'GridRepublic'
     strMenuName.Printf(
-        _("%s &website"), 
+        _("%s &web site"), 
         pSkinAdvanced->GetApplicationShortName().c_str()
     );
     // %s is the application name
@@ -267,22 +296,22 @@ CSimpleFrame::CSimpleFrame(wxString title, wxIcon* icon, wxIcon* icon32, wxPoint
 #ifdef __WXMAC__
     m_pMenubar->MacInstallMenuBar();
     MacLocalizeBOINCMenu();
-
-    // Enable Mac OS X's standard Preferences menu item (handled in MacSysMenu.cpp)
-    EnableMenuCommand(NULL, kHICommandPreferences);
+    
+    // Mac needs a short delay to ensure that controls are
+    // created in proper order to allow keyboard navigation
+    m_iFrameRefreshRate = 1;    // 1 millisecond
+    m_pPeriodicRPCTimer->Start(m_iFrameRefreshRate);
 #endif
 
     m_Shortcuts[0].Set(wxACCEL_NORMAL, WXK_HELP, ID_HELPBOINCMANAGER);
-#ifdef __WXMAC__
-    m_Shortcuts[1].Set(wxACCEL_CMD|wxACCEL_SHIFT, (int)'E', ID_EVENTLOG);
-#else
     m_Shortcuts[1].Set(wxACCEL_CTRL|wxACCEL_SHIFT, (int)'E', ID_EVENTLOG);
-#endif
-    m_pAccelTable = new wxAcceleratorTable(2, m_Shortcuts);
+    m_Shortcuts[2].Set(wxACCEL_CTRL|wxACCEL_SHIFT, (int)'F', ID_SGDIAGNOSTICLOGFLAGS);
+    m_pAccelTable = new wxAcceleratorTable(3, m_Shortcuts);
 
     SetAcceleratorTable(*m_pAccelTable);
     
     dlgMsgsPtr = NULL;
+
     m_pBackgroundPanel = new CSimpleGUIPanel(this);
     
     RestoreState();
@@ -301,10 +330,10 @@ CSimpleFrame::~CSimpleFrame() {
 }
 
 
-bool CSimpleFrame::SaveState() {
-	CBOINCBaseFrame::SaveState();
+bool CSimpleFrame::SaveWindowPosition() {
     wxConfigBase*   pConfig = wxConfigBase::Get(FALSE);
 	wxString        strBaseConfigLocation = wxString(wxT("/Simple"));
+    wxPoint         pos = GetPosition();
 
     wxASSERT(pConfig);
 
@@ -314,21 +343,29 @@ bool CSimpleFrame::SaveState() {
     //   pointer, return false.
     if (!pConfig) return false;
 
-    //
-    // Save Frame State
-    //
     pConfig->SetPath(strBaseConfigLocation);
 
-    pConfig->Write(wxT("XPos"), GetPosition().x);
-    pConfig->Write(wxT("YPos"), GetPosition().y);
-
+    pConfig->Write(wxT("XPos"), pos.x);
+    pConfig->Write(wxT("YPos"), pos.y);
     return true;
+}
+
+
+bool CSimpleFrame::SaveState() {
+	CBOINCBaseFrame::SaveState();
+    return SaveWindowPosition();
 }
 
 
 bool CSimpleFrame::RestoreState() {
 	CBOINCBaseFrame::RestoreState();
     return true;
+}
+
+
+void CSimpleFrame::OnMove(wxMoveEvent& event) {
+    SaveWindowPosition();
+    event.Skip();
 }
 
 
@@ -481,6 +518,16 @@ void CSimpleFrame::OnOptions(wxCommandEvent& WXUNUSED(event)) {
 }
 
 
+void CSimpleFrame::OnDiagnosticLogFlags(wxCommandEvent& WXUNUSED(event)) {
+    wxLogTrace(wxT("Function Start/End"), wxT("CSimpleFrame::OnDiagnosticLogFlags - Function Begin"));
+
+    CDlgDiagnosticLogFlags dlg(this);
+	dlg.ShowModal();
+
+    wxLogTrace(wxT("Function Start/End"), wxT("CSimpleFrame::OnDiagnosticLogFlags - Function End"));
+}
+
+
 // TODO: Create ID_HELPBOINCMANAGER web page for each organization for new BOINC version
 void CSimpleFrame::OnHelpBOINC(wxCommandEvent& event) {
     wxLogTrace(wxT("Function Start/End"), wxT("CSimpleFrame::OnHelpBOINC - Function Begin"));
@@ -508,7 +555,9 @@ void CSimpleFrame::OnHelpAbout(wxCommandEvent& /*event*/) {
 	m_pBackgroundPanel->SetDlgOpen(true);
 
     CDlgAbout dlg(this);
+    wxGetApp().SetAboutDialogIsOpen(true);
     dlg.ShowModal();
+    wxGetApp().SetAboutDialogIsOpen(false);
 
     m_pBackgroundPanel->SetDlgOpen(false);
 
@@ -544,7 +593,7 @@ void CSimpleFrame::OnReloadSkin(CFrameEvent& WXUNUSED(event)) {
 
     m_pBackgroundPanel->ReskinInterface();
     SetTitle(pSkinAdvanced->GetApplicationName());
-    SetIcon(*pSkinAdvanced->GetApplicationIcon());
+    SetIcon(pSkinAdvanced->GetApplicationIcon()->GetIcon(wxDefaultSize));
 
     wxLogTrace(wxT("Function Start/End"), wxT("CSimpleFrame::OnReloadSkin - Function End"));
 }
@@ -578,6 +627,11 @@ void CSimpleFrame::OnRefreshView(CFrameEvent& WXUNUSED(event)) {
     }
     
 #ifdef __WXMAC__
+    if (m_iFrameRefreshRate != 1000) {
+        m_iFrameRefreshRate = 1000;
+        m_pPeriodicRPCTimer->Start(m_iFrameRefreshRate);
+    }
+
     // We disabled tooltips on Mac while menus were popped up because they cover menus
     wxToolTip::Enable(true);
 #endif
@@ -630,16 +684,14 @@ void CSimpleFrame::OnConnect(CFrameEvent& WXUNUSED(event)) {
     ACCT_MGR_INFO ami;
     PROJECT_INIT_STATUS pis;
 	CC_STATUS     status;
+    int wasShown = 0;
+    int wasVisible = 0;
 
     wxASSERT(pDoc);
     wxASSERT(wxDynamicCast(pDoc, CMainDocument));
 
     pDoc->ForceCacheUpdate();
     pDoc->GetCoreClientStatus(status, true);
-
-#ifdef __WXMAC__
-    wxGetApp().GetMacSystemMenu()->BuildMenu();
-#endif
 
 	// If we are connected to the localhost, run a really quick screensaver
     //   test to trigger a firewall popup.
@@ -652,20 +704,54 @@ void CSimpleFrame::OnConnect(CFrameEvent& WXUNUSED(event)) {
 
     pDoc->rpc.get_project_init_status(pis);
     pDoc->rpc.acct_mgr_info(ami);
-    if (ami.acct_mgr_url.size() && !ami.have_credentials) {
-        if (!IsShown()) {
-            Show();
+
+    if (ami.acct_mgr_url.size() && ami.have_credentials) {
+        // Fall through
+        //
+        // There isn't a need to bring up the attach wizard, the account manager will
+        // take care of ataching to projects when it completes the RPCs
+        //
+    } else if (ami.acct_mgr_url.size() && !ami.have_credentials) {
+        wasShown = IsShown();
+        Show();
+        wasVisible = wxGetApp().IsApplicationVisible();
+        if (!wasVisible) {
+            wxGetApp().ShowApplication(true);
         }
 
         pWizard = new CWizardAttach(this);
         if (pWizard->SyncToAccountManager()) {
-            // If successful, hide the main window
-            Hide();
+            // _GRIDREPUBLIC, _PROGRESSTHRUPROCESSORS and _CHARITYENGINE
+            // are defined for those branded builds on Windows only
+#if defined(_GRIDREPUBLIC) || defined(_PROGRESSTHRUPROCESSORS) || defined(_CHARITYENGINE) || defined(__WXMAC__)
+#ifdef __WXMAC__
+            // For GridRepublic, Charity Engine or ProgressThruProcessors, 
+            // the Mac installer put a branding file in our data directory
+            long iBrandID = 0;  // 0 is unbranded (default) BOINC
+
+            FILE *f = boinc_fopen("/Library/Application Support/BOINC Data/Branding", "r");
+            if (f) {
+                fscanf(f, "BrandId=%ld\n", &iBrandID);
+                fclose(f);
+            }
+            if ((iBrandID > 0) && (iBrandID < 4))
+#endif
+            {
+                // If successful, hide the main window if we showed it
+                if (!wasVisible) {
+                    wxGetApp().ShowApplication(false);
+                }
+#ifndef __WXMAC__   // See comment in CBOINCGUIApp::OnFinishInit()
+                if (!wasShown) {
+                    Hide();
+                }
+#endif
+            }
+#endif
         }
     } else if ((pis.url.size() || (0 >= pDoc->GetSimpleProjectCount())) && !status.disallow_attach) {
-        if (!IsShown()) {
-            Show();
-        }
+        Show();
+        wxGetApp().ShowApplication(true);
 
         strName = wxString(pis.name.c_str(), wxConvUTF8);
         strURL = wxString(pis.url.c_str(), wxConvUTF8);
@@ -697,7 +783,6 @@ void CSimpleFrame::OnEventLog(wxCommandEvent& WXUNUSED(event)) {
 IMPLEMENT_DYNAMIC_CLASS(CSimpleGUIPanel, wxPanel)
 
 BEGIN_EVENT_TABLE(CSimpleGUIPanel, wxPanel)
-    EVT_SIZE(CSimpleGUIPanel::OnSize)
     EVT_ERASE_BACKGROUND(CSimpleGUIPanel::OnEraseBackground)    
 	EVT_BUTTON(ID_SGNOTICESBUTTON,CSimpleGUIPanel::OnShowNotices)
 	EVT_BUTTON(ID_SGSUSPENDRESUMEBUTTON,CSimpleGUIPanel::OnSuspendResume)
@@ -753,7 +838,7 @@ CSimpleGUIPanel::CSimpleGUIPanel(wxWindow* parent) :
 	wxBoxSizer* buttonsSizer;
 	buttonsSizer = new wxBoxSizer( wxHORIZONTAL );
 
-	m_NoticesButton = new CTransparentButton( this, ID_SGNOTICESBUTTON, _("Notices"), wxDefaultPosition, wxDefaultSize, 0 );
+	m_NoticesButton = new wxButton( this, ID_SGNOTICESBUTTON, _("Notices"), wxDefaultPosition, wxDefaultSize, 0 );
     m_NoticesButton->SetToolTip( _("Open a window to view notices from projects or BOINC"));
 	buttonsSizer->Add( m_NoticesButton, 0, wxEXPAND | wxALIGN_LEFT, 0 );
     buttonsSizer->AddStretchSpacer();
@@ -763,7 +848,7 @@ CSimpleGUIPanel::CSimpleGUIPanel(wxWindow* parent) :
     GetTextExtent(m_sResumeString, &resumeWidth, &y);
     
     m_bIsSuspended = suspendWidth > resumeWidth;
-    m_SuspendResumeButton = new CTransparentButton( this, ID_SGSUSPENDRESUMEBUTTON, 
+    m_SuspendResumeButton = new wxButton( this, ID_SGSUSPENDRESUMEBUTTON, 
                             m_bIsSuspended ? m_sSuspendString : m_sResumeString,
                             wxDefaultPosition, wxDefaultSize, 0 );
     m_SuspendResumeButton->SetToolTip(wxEmptyString);
@@ -771,7 +856,7 @@ CSimpleGUIPanel::CSimpleGUIPanel(wxWindow* parent) :
 	buttonsSizer->Add( m_SuspendResumeButton, 0, wxEXPAND | wxALIGN_RIGHT, 0 );
     buttonsSizer->AddStretchSpacer();
 
-    m_HelpButton = new CTransparentButton( this, ID_SIMPLE_HELP, _("Help"), wxDefaultPosition, wxDefaultSize, 0 );
+    m_HelpButton = new wxButton( this, ID_SIMPLE_HELP, _("Help"), wxDefaultPosition, wxDefaultSize, 0 );
 	buttonsSizer->Add( m_HelpButton, 0, wxEXPAND | wxALIGN_RIGHT, 0 );
 
     wxString helpTip;
@@ -792,9 +877,7 @@ CSimpleGUIPanel::CSimpleGUIPanel(wxWindow* parent) :
     // Tell accessibility aids to ignore this panel (but not its contents)
     HIObjectSetAccessibilityIgnored((HIObjectRef)GetHandle(), true);
     
-    SInt32 response;
-    OSStatus err = Gestalt(gestaltSystemVersion, &response);
-    if ((err == noErr) && (response >= 0x1070)) {
+    if (compareOSVersionTo(10, 7) >= 0) {
         m_iRedRingRadius = 4;
     } else {
         m_iRedRingRadius = 12;
@@ -802,6 +885,7 @@ CSimpleGUIPanel::CSimpleGUIPanel(wxWindow* parent) :
 #endif    
 
     m_SuspendResumeButton->Disable();
+
     OnFrameRender();
 
     wxLogTrace(wxT("Function Start/End"), wxT("CSimpleGUIPanel::CSimpleGUIPanel - Overloaded Constructor Function End"));
@@ -837,6 +921,14 @@ void CSimpleGUIPanel::SetBackgroundBitmap() {
     wxBrush bgBrush(bgColor);
     dc.SetBackground(bgBrush);
     dc.Clear();
+#ifdef __WXMAC__
+    // Work around an apparent bug in wxMemoryDC::Clear() in wxCarbon 2.9.4
+    // TODO: remove this when the wxCarbon bug is fixed
+    dc.SetBrush(bgBrush);
+    wxPen bgPen(bgColor);
+    dc.SetPen(bgPen);
+    dc.DrawRectangle(panelRect);
+#endif
     dc.DrawBitmap(*pSkinSimple->GetBackgroundImage()->GetBitmap(), 0, 0, false);
 
     wxLogTrace(wxT("Function Start/End"), wxT("CSimpleGUIPanel::SetBackgroundBitmap - Function End"));
@@ -1085,3 +1177,29 @@ void CSimpleGUIPanel::OnEraseBackground(wxEraseEvent& event) {
 #endif
     dc->DrawBitmap(m_bmpBg, 0, 0);
 }
+
+
+#ifdef __WXMAC__
+static int compareOSVersionTo(int toMajor, int toMinor) {
+    SInt32 major, minor;
+    OSStatus err = noErr;
+    
+    err = Gestalt(gestaltSystemVersionMajor, &major);
+    if (err != noErr) {
+        fprintf(stderr, "Gestalt(gestaltSystemVersionMajor) returned error %ld\n", err);
+        fflush(stderr);
+        return -1;  // gestaltSystemVersionMajor selector was not available before OS 10.4
+    }
+    if (major < toMajor) return -1;
+    if (major > toMajor) return 1;
+    err = Gestalt(gestaltSystemVersionMinor, &minor);
+    if (err != noErr) {
+        fprintf(stderr, "Gestalt(gestaltSystemVersionMinor) returned error %ld\n", err);
+        fflush(stderr);
+        return -1;  // gestaltSystemVersionMajor selector was not available before OS 10.4
+    }
+    if (minor < toMinor) return -1;
+    if (minor > toMinor) return 1;
+    return 0;
+}
+#endif

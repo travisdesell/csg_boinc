@@ -9,7 +9,7 @@ function type_text($type) {
         case "win_new":
             return "Windows installer";
         case "bare_core":
-            return "Core client only (command-line)";
+            return "Command-line client (no GUI)";
         case "sea":
             return "Self-extracting archive";
 		case "mac_advanced":
@@ -24,7 +24,7 @@ function type_text($type) {
         case "win_new":
             return "<a href=win_install.php>Windows installer</a>";
         case "bare_core":
-            return "<a href=bare_core.php>Core client only (command-line)</a>";
+            return "<a href=bare_core.php>Command-line client (no GUI)</a>";
         case "sea":
             return "<a href=sea.php>Self-extracting archive</a>";
 		case "mac_advanced":
@@ -43,33 +43,37 @@ function linux_info() {
     instead.  ";
 }
 
-$w72dev = array(
-	"num"=>"7.1.1",
+$w74dev = array(
+	"num"=>"7.4.12",
 	"status"=>"Development version",
-	"file"=>"boinc_7.1.1_windows_intelx86.exe",
-	"date"=>"16 May 2013",
+	"file"=>"boinc_7.4.12_windows_intelx86.exe",
+	"vbox_file"=>"boinc_7.4.12_windows_intelx86_vbox.exe",
+  "vbox_version"=>"4.3.12",
+	"date"=>"04 Aug 2014",
+	"type"=>"win_new",
+);
+
+$w72 = array(
+	"num"=>"7.2.42",
+	"status"=>"Recommended version",
+	"file"=>"boinc_7.2.42_windows_intelx86.exe",
+	"vbox_file"=>"boinc_7.2.42_windows_intelx86_vbox.exe",
+  "vbox_version"=>"4.2.16",
+	"date"=>"28 Feb 2014",
 	"type"=>"win_new",
 );
 
 $w70 = array(
 	"num"=>"7.0.64",
-	"status"=>"Recommended version",
+	"status"=>"Older version",
 	"file"=>"boinc_7.0.64_windows_intelx86.exe",
 	"date"=>"17 Apr 2013",
 	"type"=>"win_new",
 );
 
-$w70old = array(
-	"num"=>"7.0.28",
-	"status"=>"Older version",
-	"file"=>"boinc_7.0.28_windows_intelx86.exe",
-	"date"=>"21 May 2012",
-	"type"=>"win_new",
-);
-
 $w66 = array(
     "num"=>"6.6.38",
-	"status"=>"Older version (also works on Windows 98, Windows ME)",
+    "status"=>"Older version (also works on Windows 98, Windows ME)",
     "file"=>"boinc_6.6.38_windows_intelx86.exe",
     "date"=>"28 Oct 2009",
     "type"=>"win_new",
@@ -83,51 +87,55 @@ $w5816 = array(
     "type"=>"win_new",
 );
 
-$w72x64dev = array(
-	"num"=>"7.1.1",
+$w74x64dev = array(
+	"num"=>"7.4.12",
 	"status"=>"Development version",
-	"file"=>"boinc_7.1.1_windows_x86_64.exe",
-	"date"=>"16 May 2013",
+	"file"=>"boinc_7.4.12_windows_x86_64.exe",
+	"vbox_file"=>"boinc_7.4.12_windows_x86_64_vbox.exe",
+  "vbox_version"=>"4.3.12",
+	"date"=>"04 Aug 2014",
+	"type"=>"win_new",
+);
+
+$w72x64 = array(
+	"num"=>"7.2.42",
+	"status"=>"Recommended version",
+	"file"=>"boinc_7.2.42_windows_x86_64.exe",
+	"vbox_file"=>"boinc_7.2.42_windows_x86_64_vbox.exe",
+  "vbox_version"=>"4.2.16",
+	"date"=>"28 Feb 2014",
 	"type"=>"win_new",
 );
 
 $w70x64 = array(
 	"num"=>"7.0.64",
-	"status"=>"Recommended version",
+	"status"=>"Older version",
 	"file"=>"boinc_7.0.64_windows_x86_64.exe",
 	"date"=>"17 Apr 2013",
 	"type"=>"win_new",
 );
 
-$w70x64old = array(
-	"num"=>"7.0.28",
-	"status"=>"Older version",
-	"file"=>"boinc_7.0.28_windows_x86_64.exe",
-	"date"=>"21 May 2012",
-	"type"=>"win_new",
+$m74dev = array(
+	"num"=>"7.4.12",
+	"status"=>"Development version (standard GUI)",
+	"file"=>"boinc_7.4.12_macOSX_i686.zip",
+	"date"=>"4 Aug 2014",
+	"type"=>"mac_advanced",
 );
 
-$m72dev = array(
-	"num"=>"7.1.1",
-	"status"=>"Development version (standard GUI)",
-	"file"=>"boinc_7.1.1_macOSX_i686.zip",
-	"date"=>"16 May 2013",
+$m72 = array(
+	"num"=>"7.2.42",
+	"status"=>"Recommended version (standard GUI)",
+	"file"=>"boinc_7.2.42_macOSX_i686.zip",
+	"date"=>"28 Feb 2014",
 	"type"=>"mac_advanced",
 );
 
 $m70 = array(
 	"num"=>"7.0.65",
-	"status"=>"Recommended version (standard GUI)",
+	"status"=>"Older version (standard GUI)",
 	"file"=>"boinc_7.0.65_macOSX_i686.zip",
 	"date"=>"17 Apr 2013",
-	"type"=>"mac_advanced",
-);
-
-$m70old = array(
-	"num"=>"7.0.31",
-	"status"=>"Older version (standard GUI)",
-	"file"=>"boinc_7.0.31_macOSX_i686.zip",
-	"date"=>"7 July 2012",
 	"type"=>"mac_advanced",
 );
 
@@ -147,27 +155,27 @@ $m66 = array(
     "type"=>"mac_advanced",
 );
 
-$m72cdev = array(
-	"num"=>"7.1.1",
+$m74cdev = array(
+	"num"=>"7.4.12",
 	"status"=>"Development version (Unix command-line version)",
-	"file"=>"boinc_7.1.1_i686-apple-darwin.zip",
-	"date"=>"16 May 2013",
+	"file"=>"boinc_7.4.12_i686-apple-darwin.zip",
+	"date"=>"04 Aug 2014",
+	"type"=>"bare_core",
+);
+
+$m72c = array(
+	"num"=>"7.2.42",
+	"status"=>"Recommended version (Unix command-line version)",
+	"file"=>"boinc_7.2.42_i686-apple-darwin.zip",
+	"date"=>"28 Feb 2014",
 	"type"=>"bare_core",
 );
 
 $m70c = array(
 	"num"=>"7.0.65",
-	"status"=>"Recommended version (Unix command-line version)",
+	"status"=>"Older version (Unix command-line version)",
 	"file"=>"boinc_7.0.65_i686-apple-darwin.zip",
 	"date"=>"17 Apr 2013",
-	"type"=>"bare_core",
-);
-
-$m70cold = array(
-	"num"=>"7.0.31",
-	"status"=>"Older version (Unix command-line version)",
-	"file"=>"boinc_7.0.31_i686-apple-darwin.zip",
-	"date"=>"29 July 2012",
 	"type"=>"bare_core",
 );
 
@@ -203,59 +211,59 @@ $l66 = array(
 	"type"=>"sea",
 	);
 
-$l72ubuntudev = array(
-	"num"=>"7.1.1",
+$l74ubuntudev = array(
+	"num"=>"7.4.12",
 	"status"=>"Development version",
-	"file"=>"boinc_7.1.1_i686-pc-linux-gnu.sh",
-	"date"=>"16 May 2013",
+	"file"=>"boinc_7.4.12_i686-pc-linux-gnu.sh",
+	"date"=>"04 Aug 2014",
+	"type"=>"sea",
+);
+
+$l72ubuntu = array(
+	"num"=>"7.2.42",
+	"status"=>"Recommended version",
+	"file"=>"boinc_7.2.42_i686-pc-linux-gnu.sh",
+	"date"=>"28 Feb 2014",
 	"type"=>"sea",
 );
 
 $l70ubuntu = array(
 	"num"=>"7.0.65",
-	"status"=>"Recommended version",
+	"status"=>"Older version",
 	"file"=>"boinc_7.0.65_i686-pc-linux-gnu.sh",
 	"date"=>"17 Apr 2013",
 	"type"=>"sea",
 );
 
-$l70ubuntuold = array(
-	"num"=>"7.0.28",
-	"status"=>"Older version",
-	"file"=>"boinc_7.0.28_i686-pc-linux-gnu.sh",
-	"date"=>"21 May 2012",
+$l74ubuntux64dev = array(
+	"num"=>"7.4.12",
+	"status"=>"Development version",
+	"file"=>"boinc_7.4.12_x86_64-pc-linux-gnu.sh",
+	"date"=>"04 Aug 2014",
 	"type"=>"sea",
 );
 
-$l72ubuntux64dev = array(
-	"num"=>"7.1.1",
-	"status"=>"Development version",
-	"file"=>"boinc_7.1.1_x86_64-pc-linux-gnu.sh",
-	"date"=>"16 May 2013",
+$l72ubuntux64 = array(
+	"num"=>"7.2.42",
+	"status"=>"Recommended version",
+	"file"=>"boinc_7.2.42_x86_64-pc-linux-gnu.sh",
+	"date"=>"28 Feb 2014",
 	"type"=>"sea",
 );
 
 $l70ubuntux64 = array(
 	"num"=>"7.0.65",
-	"status"=>"Recommended version",
+	"status"=>"Older version",
 	"file"=>"boinc_7.0.65_x86_64-pc-linux-gnu.sh",
 	"date"=>"17 Apr 2013",
 	"type"=>"sea",
 );
 
-$l70ubuntux64old = array(
-	"num"=>"7.0.28",
-	"status"=>"Older version",
-	"file"=>"boinc_7.0.28_x86_64-pc-linux-gnu.sh",
-	"date"=>"21 May 2012",
-	"type"=>"sea",
-);
-
-$adev = array(
-	"num"=>"7.0.58",
-	"status"=>"Development version",
-	"file"=>"boinc_7.0.58_arm-android-linux-gnu.apk",
-	"date"=>"21 Mar 2013",
+$a73 = array(
+	"num"=>"7.3.7",
+	"status"=>"Recommended Version",
+	"file"=>"boinc_7.3.7.apk",
+	"date"=>"3 Mar 2014",
 	"type"=>"apk",
 );
 
@@ -264,27 +272,26 @@ $adev = array(
 // i.e. the first non-dev version is the current one
 
 $windows = array(
-    "name"=>"Windows",
-    "description"=>"2000/XP/Vista/7",
+    "name"=>"Windows 32-bit",
+    "description"=>"XP/Vista/7/8/8.1",
     "dbname" => "windows_intelx86",
     "versions"=>array(
-		$w72dev,
-		$w70,
-		$w70old,
-		$w66,
-        $w5816,
+		  $w74dev,
+		  $w72,
+		  $w70,
+		  $w66,
+      $w5816,
     )
 );
 
 $windowsx64 = array(
     "name"=>"Windows 64-bit",
-    "description"=>"XP/Vista/7",
+    "description"=>"XP/Vista/7/8/8.1",
     "dbname" => "windows_x86_64",
     "versions"=>array(
-		$w72x64dev,
-		$w70x64,
-		$w70x64old,
-		$w612x64,
+		  $w74x64dev,
+		  $w72x64,
+		  $w70x64,
     )
 );
 
@@ -293,11 +300,12 @@ $mac = array(
     "description"=>"Version 10.4.0+",
     "dbname" => "x86_64-apple-darwin",
     "versions"=>array(
-		$m72dev,
-		$m70,
-		$m70old,
-		$m70c,
-		$m70cold,
+		  $m74dev,
+          $m72,
+		  $m70,
+          $m74cdev,
+		  $m72c,
+		  $m70c,
     )
 );
 
@@ -306,10 +314,10 @@ $macppc = array(
     "description"=>"Version 10.4.0+",
     "dbname" => "powerpc-apple-darwin",
     "versions"=>array(
-		$m612_ppc,
-		$m612c_ppc,
-        $m66,
-        $m66c,
+  		$m612_ppc,
+	  	$m612c_ppc,
+      $m66,
+      $m66c,
     )
 );
 
@@ -318,9 +326,9 @@ $linux = array(
     "description"=> linux_info(),
     "dbname" => "i686-pc-linux-gnu",
     "versions"=>array(
-		$l72ubuntudev,
-		$l70ubuntu,
-		$l70ubuntuold,
+		  $l74ubuntudev,
+		  $l72ubuntu,
+		  $l70ubuntu,
     )
 );
 
@@ -329,9 +337,9 @@ $linuxx64 = array(
     "description"=> linux_info(),
     "dbname" => "x86_64-pc-linux-gnu",
     "versions"=>array(
-		$l72ubuntux64dev,
-		$l70ubuntux64,
-		$l70ubuntux64old,
+  		$l74ubuntux64dev,
+  		$l72ubuntux64,
+	  	$l70ubuntux64,
     )
 );
 
@@ -345,15 +353,32 @@ $linuxcompat = array(
 	)
 );
 
-$android = array(
-	"name"=>"Android",
-	"description"=>"For Android 2.3+ devices",
+$androidarm = array(
+	"name"=>"Android/ARM",
+	"description"=>"Android version 2.3 and later<br>We recommend that, rather than downloading BOINC from here,</br>you get it from the Google Play Store or the Amazon app store (for Kindle Fire)",
 	"dbname" => "arm-android-linux-gnu",
 	"versions"=>array(
-		$adev,
+		$a73,
 	)
 );
 
+$androidmips = array(
+	"name"=>"Android/MIPS",
+	"description"=>"Android version 2.3 and later<br>We recommend that, rather than downloading BOINC from here,</br>you get it from the Google Play Store or the Amazon app store (for Kindle Fire)",
+	"dbname" => "mips-android-linux-gnu",
+	"versions"=>array(
+		$a73,
+	)
+);
+
+$androidx86 = array(
+	"name"=>"Android/x86",
+	"description"=>"Android version 2.3 and later<br>We recommend that, rather than downloading BOINC from here,</br>you get it from the Google Play Store or the Amazon app store (for Kindle Fire)",
+	"dbname" => "x86-android-linux-gnu",
+	"versions"=>array(
+		$a73,
+	)
+);
 
 $platforms = array(
     "win"=>$windows,
@@ -362,8 +387,10 @@ $platforms = array(
     "macppc"=>$macppc,
     "linux"=>$linux,
     "linuxx64"=>$linuxx64,
-	"linuxcompat"=>$linuxcompat,
-	"android"=>$android,
+    "linuxcompat"=>$linuxcompat,
+    "androidarm"=>$androidarm,
+    "androidmips"=>$androidmips,
+    "androidx86"=>$androidx86,
 );
 
 function is_dev($v) {

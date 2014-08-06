@@ -303,7 +303,7 @@ function main() {
     echo 'All done!' . "\n";
 }
 
-if (!$USE_PHPMAILER) {
+if (!function_exists('make_php_mailer')) {
     echo "You must use PHPMailer.\n";
     exit();
 }
@@ -311,7 +311,7 @@ if (!$USE_PHPMAILER) {
 $email_files = read_email_files();
 
 if ($globals->userid) {
-    $user = lookup_user_id($globals->userid);
+    $user = BoincUser::lookup_id($globals->userid);
     if (!$user) {
         echo "no such user\n";
     } else {

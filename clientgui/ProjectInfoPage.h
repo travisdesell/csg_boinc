@@ -129,6 +129,8 @@ public:
     wxStaticBitmap* m_pProjectDetailsSupportedPlatformFreeBSDCtrl;
     wxStaticBitmap* m_pProjectDetailsSupportedPlatformATICtrl;
     wxStaticBitmap* m_pProjectDetailsSupportedPlatformNvidiaCtrl;
+    wxStaticBitmap* m_pProjectDetailsSupportedPlatformAndroidCtrl;
+    wxStaticBitmap* m_pProjectDetailsSupportedPlatformVirtualBoxCtrl;
     wxStaticBitmap* m_pProjectDetailsSupportedPlatformBlankCtrl;
     wxStaticText* m_pProjectURLStaticCtrl;
     wxTextCtrl* m_pProjectURLCtrl;

@@ -33,14 +33,12 @@
 #include "SkinManager.h"
 #include "MainDocument.h"
 #include "BOINCBaseWizard.h"
-#include "ProjectListCtrl.h"
 #include "WizardAttach.h"
 #include "AccountManagerPropertiesPage.h"
 #include "AccountManagerInfoPage.h"
 #include "AccountInfoPage.h"
 #include "CompletionErrorPage.h"
 #include "TermsOfUsePage.h"
-
 
 ////@begin XPM images
 #include "res/wizprogress01.xpm"
@@ -176,7 +174,7 @@ void CAccountManagerPropertiesPage::CreateControls()
  * wxEVT_WIZARD_PAGE_CHANGED event handler for ID_PROJECTPROPERTIESPAGE
  */
 
-void CAccountManagerPropertiesPage::OnPageChanged( wxWizardExEvent& event )
+void CAccountManagerPropertiesPage::OnPageChanged( wxWizardExEvent& /*event*/ )
 {
 //    if (event.GetDirection() == false) return;
  
@@ -288,7 +286,7 @@ void CAccountManagerPropertiesPage::OnStateChange( CAccountManagerPropertiesPage
                 IncrementProgress(m_pProgressIndicator);
 
                 ::wxMilliSleep(500);
-                ::wxSafeYield(GetParent());
+                wxEventLoopBase::GetActive()->YieldFor(wxEVT_CATEGORY_USER_INPUT);
             }
  
             if (
@@ -367,7 +365,7 @@ void CAccountManagerPropertiesPage::OnStateChange( CAccountManagerPropertiesPage
                 IncrementProgress(m_pProgressIndicator);
 
                 ::wxMilliSleep(500);
-                ::wxSafeYield(GetParent());
+                wxEventLoopBase::GetActive()->YieldFor(wxEVT_CATEGORY_USER_INPUT);
             }
 
             SetNetworkConnectionNotDetected(NETWORK_STATUS_WANT_CONNECTION == status.network_status);

@@ -162,7 +162,7 @@ void CAccountInfoPage::CreateControls()
     m_pAccountInformationStaticCtrl->Create( itemWizardPage56, wxID_STATIC, wxEmptyString, wxDefaultPosition, wxDefaultSize, 0 );
     itemBoxSizer57->Add(m_pAccountInformationStaticCtrl, 0, wxALIGN_LEFT|wxALL, 5);
 
-    wxFlexGridSizer* itemFlexGridSizer64 = new wxFlexGridSizer(4, 2, 0, 0);
+    wxFlexGridSizer* itemFlexGridSizer64 = new wxFlexGridSizer(2, 0, 0);
     itemFlexGridSizer64->AddGrowableCol(1);
     itemBoxSizer57->Add(itemFlexGridSizer64, 0, wxEXPAND|wxALL, 0);
 
@@ -511,9 +511,9 @@ void CAccountInfoPage::OnPageChanged( wxWizardExEvent& event ) {
     }
 
     if (pc.min_passwd_length) {
-        wxString str;
+        wxString str2;
         str.Printf(_("minimum length %d"), pc.min_passwd_length);
-        m_pAccountPasswordRequirmentsStaticCtrl->SetLabel( str );
+        m_pAccountPasswordRequirmentsStaticCtrl->SetLabel( str2 );
     }
 
 
@@ -529,7 +529,7 @@ void CAccountInfoPage::OnPageChanged( wxWizardExEvent& event ) {
             _("If you have not yet registered with this account manager,\nplease do so before proceeding.  Click on the link below\nto register or to retrieve a forgotten password." )
         );
         m_pAccountForgotPasswordCtrl->SetLabel(
-            _("Account manager website")
+            _("Account manager web site")
         );
         m_pAccountForgotPasswordCtrl->SetURL(
             wxString(pWA->m_AccountManagerInfoPage->GetProjectURL())
@@ -582,27 +582,9 @@ void CAccountInfoPage::OnPageChanging( wxWizardExEvent& event ) {
         if (!m_pAccountUseExistingCtrl->GetValue()) {
             if (!(m_pAccountPasswordCtrl->GetValue().Length() > 0)) {
                 if (pc.uses_username) {
-                    if (IS_ATTACHTOPROJECTWIZARD()) {
-                        strMessage.Printf(
-                            _("The minimum username length for this project is 1. Please enter a different username.")
-                        );
-                    }
-                    if (IS_ACCOUNTMANAGERWIZARD()) {
-                        strMessage.Printf(
-                            _("The minimum username length for this account manager is 1. Please enter a different username.")
-                        );
-                    }
+                    strMessage.Printf(_("Please enter a user name."));
                 } else {
-                    if (IS_ATTACHTOPROJECTWIZARD()) {
-                        strMessage.Printf(
-                            _("The minimum email address length for this project is 1. Please enter a different email address.")
-                        );
-                    }
-                    if (IS_ACCOUNTMANAGERWIZARD()) {
-                        strMessage.Printf(
-                            _("The minimum email address length for this account manager is 1. Please enter a different email address.")
-                        );
-                    }
+                    strMessage.Printf(_("Please enter an email address."));
                 }
                 bDisplayError = true;
             }
@@ -611,19 +593,10 @@ void CAccountInfoPage::OnPageChanging( wxWizardExEvent& event ) {
         // Verify minimum password length
         if (!m_pAccountUseExistingCtrl->GetValue()) {
             if (m_pAccountPasswordCtrl->GetValue().Length() < (size_t)pc.min_passwd_length) {
-                if (IS_ATTACHTOPROJECTWIZARD()) {
-                    strMessage.Printf(
-                        _("The minimum password length for this project is %d. Please enter a different password."),
-                        pc.min_passwd_length
-                    );
-                }
-                if (IS_ACCOUNTMANAGERWIZARD()) {
-                    strMessage.Printf(
-                        _("The minimum password length for this account manager is %d. Please enter a different password."),
-                        pc.min_passwd_length
-                    );
-                }
-
+                strMessage.Printf(
+                    _("Please enter a password of at least %d characters."),
+                    pc.min_passwd_length
+                );
                 bDisplayError = true;
             }
         }

@@ -41,9 +41,11 @@
 #include <errno.h>
 
 #include "boinc_db.h"
-#include "util.h"
 #include "filesys.h"
 #include "parse.h"
+#include "str_replace.h"
+#include "util.h"
+
 #include "sched_config.h"
 #include "sched_util.h"
 #include "sched_msgs.h"
@@ -107,14 +109,14 @@ void fail(const char* msg) {
 // This does 'in place' compression.
 //
 void open_archive(const char* filename_prefix, FILE*& f){
-    char path[256];
-    char command[512];
+    char path[MAXPATHLEN];
+    char command[MAXPATHLEN+512];
 
     if (daily_dir) {
         time_t time_time = time_int;
         char dirname[32];
         strftime(dirname, sizeof(dirname), "%Y_%m_%d", gmtime(&time_time));
-        strcpy(path, config.project_path("archives/%s",dirname));
+        safe_strcpy(path, config.project_path("archives/%s",dirname));
         if (mkdir(path,0775)) {
             if(errno!=EEXIST) {
                 char errstr[256];
@@ -123,13 +125,13 @@ void open_archive(const char* filename_prefix, FILE*& f){
                 fail(errstr);
             }
         }
-        strcpy(path,
+        safe_strcpy(path,
             config.project_path(
                 "archives/%s/%s_%d.xml", dirname, filename_prefix, time_int
             )
         );
     } else {
-        strcpy(path,
+        safe_strcpy(path,
             config.project_path("archives/%s_%d.xml", filename_prefix, time_int)
         );
     }
@@ -177,7 +179,7 @@ void open_archive(const char* filename_prefix, FILE*& f){
 }
 
 void close_archive(const char *filename, FILE*& fp){
-    char path[256];
+    char path[MAXPATHLEN];
 
     // Set file pointer to NULL after closing file to indicate that it's closed.
     //
@@ -198,13 +200,13 @@ void close_archive(const char *filename, FILE*& fp){
         time_t time_time = time_int;
         char dirname[32];
         strftime(dirname, sizeof(dirname), "%Y_%m_%d", gmtime(&time_time));
-        strcpy(path,
+        safe_strcpy(path,
             config.project_path(
                   "archives/%s/%s_%d.xml", dirname, filename, time_int
             )
         );
     } else {
-        strcpy(path,
+        safe_strcpy(path,
             config.project_path("archives/%s_%d.xml", filename, time_int)
         );
     }
@@ -307,6 +309,7 @@ int archive_result(DB_RESULT& result) {
         "  <opaque>%f</opaque>\n"
         "  <random>%d</random>\n"
         "  <app_version_num>%d</app_version_num>\n"
+        "  <app_version_id>%d</app_version_id>\n"
         "  <appid>%d</appid>\n"
         "  <exit_status>%d</exit_status>\n"
         "  <teamid>%d</teamid>\n"
@@ -335,6 +338,7 @@ int archive_result(DB_RESULT& result) {
         result.opaque,
         result.random,
         result.app_version_num,
+        result.app_version_id,
         result.appid,
         result.exit_status,
         result.teamid,
@@ -491,7 +495,7 @@ bool do_pass() {
     char buf[256];
 
     if (min_age_days) {
-        min_age_seconds = (int) min_age_days*86400;
+        min_age_seconds = (int) (min_age_days*86400);
         if (id_modulus) {
             sprintf(buf,
                 "where file_delete_state=%d and mod_time<current_timestamp() - interval %d second and id %% %d = %d limit %d",
@@ -564,6 +568,14 @@ bool do_pass() {
                     wu.id, retval
                 );
                 exit(6);
+            }
+            if (config.enable_assignment) {
+                DB_ASSIGNMENT asg;
+                sprintf(buf, "where workunitid=%d", wu.id);
+                retval = asg.lookup(buf);
+                if (!retval) {
+                    asg.delete_from_db();
+                }
             }
         }
         log_messages.printf(MSG_DEBUG,

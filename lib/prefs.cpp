@@ -47,6 +47,7 @@ void GLOBAL_PREFS_MASK::clear() {
 
 void GLOBAL_PREFS_MASK::set_all() {
     battery_charge_min_pct = true;
+    battery_max_temperature = true;
     confirm_before_connecting = true;
     cpu_scheduling_period_minutes = true;
     cpu_usage_limit = true;
@@ -83,6 +84,7 @@ void GLOBAL_PREFS_MASK::set_all() {
 
 bool GLOBAL_PREFS_MASK::are_prefs_set() {
     if (battery_charge_min_pct) return true;
+    if (battery_max_temperature) return true;
     if (confirm_before_connecting) return true;
     if (cpu_scheduling_period_minutes) return true;
     if (cpu_usage_limit) return true;
@@ -207,7 +209,8 @@ void WEEK_PREFS::unset(int day) {
 // so that the client can do the RPC and get the global prefs from the server
 //
 void GLOBAL_PREFS::defaults() {
-    battery_charge_min_pct = 95;
+    battery_charge_min_pct = 90;
+    battery_max_temperature = 40;
     confirm_before_connecting = true;
     cpu_scheduling_period_minutes = 60;
     cpu_times.clear();
@@ -215,7 +218,7 @@ void GLOBAL_PREFS::defaults() {
     daily_xfer_limit_mb = 0;
     daily_xfer_period_days = 0;
     disk_interval = 60;
-    disk_max_used_gb = 1000;
+    disk_max_used_gb = 0;
     disk_max_used_pct = 90;
     disk_min_free_gb = 0.1;
     dont_verify_images = false;
@@ -225,15 +228,31 @@ void GLOBAL_PREFS::defaults() {
     max_bytes_sec_down = 0;
     max_bytes_sec_up = 0;
     max_ncpus = 0;
+#ifdef ANDROID
+    max_ncpus_pct = 50;
+#else
     max_ncpus_pct = 0;
+#endif
     net_times.clear();
+#ifdef ANDROID
+    network_wifi_only = true;
+#else
     network_wifi_only = false;
+#endif
     ram_max_used_busy_frac = 0.5;
+#ifdef ANDROID
+    ram_max_used_idle_frac = 0.5;
+#else
     ram_max_used_idle_frac = 0.9;
+#endif
     run_gpu_if_user_active = false;
     run_if_user_active = true;
-    run_on_batteries = true;
+    run_on_batteries = false;
+#ifdef ANDROID
+    suspend_cpu_usage = 50;
+#else
     suspend_cpu_usage = 25;
+#endif
     suspend_if_no_recent_input = 0;
     vm_max_used_frac = 0.75;
     work_buf_additional_days = 0.5;
@@ -391,6 +410,10 @@ int GLOBAL_PREFS::parse_override(
         }
         if (xp.parse_double("battery_charge_min_pct", battery_charge_min_pct)) {
             mask.battery_charge_min_pct = true;
+            continue;
+        }
+        if (xp.parse_double("battery_max_temperature", battery_max_temperature)) {
+            mask.battery_max_temperature = true;
             continue;
         }
         if (xp.parse_bool("run_on_batteries", run_on_batteries)) {
@@ -592,6 +615,7 @@ int GLOBAL_PREFS::write(MIOFILE& f) {
         "   <source_project>%s</source_project>\n"
         "   <mod_time>%f</mod_time>\n"
         "   <battery_charge_min_pct>%f</battery_charge_min_pct>\n"
+        "   <battery_max_temperature>%f</battery_max_temperature>\n"
         "   <run_on_batteries>%d</run_on_batteries>\n"
         "   <run_if_user_active>%d</run_if_user_active>\n"
         "   <run_gpu_if_user_active>%d</run_gpu_if_user_active>\n"
@@ -627,6 +651,7 @@ int GLOBAL_PREFS::write(MIOFILE& f) {
         source_project,
         mod_time,
         battery_charge_min_pct,
+        battery_max_temperature,
         run_on_batteries?1:0,
         run_if_user_active?1:0,
         run_gpu_if_user_active?1:0,
@@ -758,6 +783,11 @@ int GLOBAL_PREFS::write_subset(MIOFILE& f, GLOBAL_PREFS_MASK& mask) {
     if (mask.battery_charge_min_pct) {
         f.printf("   <battery_charge_min_pct>%f</battery_charge_min_pct>\n",
             battery_charge_min_pct
+        );
+    }
+    if (mask.battery_max_temperature) {
+        f.printf("   <battery_max_temperature>%f</battery_max_temperature>\n",
+            battery_max_temperature
         );
     }
     if (mask.confirm_before_connecting) {

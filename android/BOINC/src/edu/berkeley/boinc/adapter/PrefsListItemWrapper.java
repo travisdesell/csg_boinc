@@ -18,6 +18,7 @@
  ******************************************************************************/
 package edu.berkeley.boinc.adapter;
 
+import edu.berkeley.boinc.R;
 import android.content.Context;
 
 public class PrefsListItemWrapper {
@@ -26,13 +27,22 @@ public class PrefsListItemWrapper {
 	public Integer ID;
 	public Integer categoryID;
 	public Boolean isCategory;
+	public String header;
+	public String description = "";
 	
 	// Constructor for elements
 	public PrefsListItemWrapper (Context ctx, Integer ID, Integer categoryID) {
 		this.ctx = ctx;
 		this.ID = ID;
+		this.header = ctx.getString(ID);
 		this.categoryID = categoryID;
 		this.isCategory = false;
+		
+		switch(ID) {
+		case R.string.prefs_power_source_header:
+			description = ctx.getString(R.string.prefs_power_source_description);
+		}
+		// further description mapping see PrefsListItemWrapperValue class
 	}
 	
 	// Constructor for categories

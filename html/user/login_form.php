@@ -23,7 +23,8 @@ check_get_args(array("next_url"));
 
 $next_url = sanitize_local_url(get_str('next_url', true));
 
-redirect_to_secure_url("login_form.php?next_url=$next_url");
+$u = "login_form.php?next_url=".urlencode($next_url);
+redirect_to_secure_url($u);
 
 $user = get_logged_in_user(false);
 
@@ -43,7 +44,8 @@ echo "
 ";
 start_table();
 row2(tra("Email address:") . '<br><span class="note"><a href="get_passwd.php">'.tra("forgot email address?")."</a></span>",
-    "<input name=email_addr type=\"text\" size=40 tabindex=1>");
+    "<input name=email_addr type=\"text\" size=40 tabindex=1>"
+);
 row2(tra("Password:") . '<br><span class="note"><a href="get_passwd.php">' . tra("forgot password?") . "</a></span>",
     '<input type="password" name="passwd" size="40" tabindex="2">'
 );
@@ -51,9 +53,18 @@ row2(tra("Stay logged in"),
     '<input type="checkbox" name="stay_logged_in" checked>'
 );
 $x = urlencode($next_url);
+
+$config = get_config();
+if (parse_bool($config, "disable_account_creation")
+    || parse_bool($config, "no_web_account_creation")
+) {
+    $create_acct = "";
+} else {
+    $create_acct = tra("or %1create an account%2.", "<a href=\"create_account_form.php?next_url=$x\">","</a>");
+}
+
 row2("",
-    "<input type=\"submit\" name=\"mode\" value=\"".tra("Log in")."\" tabindex=\"3\"><br><br>".
-    tra("or %1create an account%2.", "<a href=\"create_account_form.php?next_url=$x\">","</a>")
+    "<input type=\"submit\" name=\"mode\" value=\"".tra("Log in")."\" tabindex=\"3\"><br><br>". $create_acct
 );
 if ($user) {
     row1("Log out");

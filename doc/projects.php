@@ -41,7 +41,7 @@ a partial summary is <a href=http://boincfaq.mundayweb.com/index.php?view=67>her
 <p>
 If your computer is equipped with a Graphics Processing Unit
 (GPU), you may be able to
-<a href=http://boinc.berkeley.edu/wiki/GPU_computing>use it to compute faster</a>.
+<a href=\"http://boinc.berkeley.edu/wiki/GPU_computing\">use it to compute faster</a>.
 ";
 
 // Display projects grouped by area.
@@ -74,7 +74,7 @@ function grouped_display($areas) {
             $home = $p[2];
             $area = $p[3];
             $master_url = $p[1];
-            if (array_key_exists(6, $p)) {
+            if (array_key_exists(6, $p) && strlen($p[6])) {
                 $master_url = $p[6];
             }
             $p = get_platforms_string($master_url);
@@ -136,10 +136,16 @@ function ordered_display($areas, $sort) {
         $area = $p['area'];
         $spec_area = $p[3];
         $master_url = $p[1];
-        if (array_key_exists(6, $p)) {
+        if (array_key_exists(6, $p) && strlen($p[6])) {
             $master_url = $p[6];
         }
-        $p = get_platforms_string($master_url);
+        $p = get_platform_icons($master_url);
+        if (!$p) {
+            $p = tra("Unknown");
+        } else {
+            $pd = get_platforms_string($master_url, false);
+            $p .= "<br><a href=projects.php onmouseover=\"popup('Supported platforms:<br>$pd', 240)\">Details</a>";
+        }
         echo "<tr class=row$n>
             <td valign=top>$x</td>
             <td valign=top>$area</td>
@@ -155,7 +161,7 @@ function ordered_display($areas, $sort) {
 
 //grouped_display($areas);
 
-$sort = $_GET['sort'];
+$sort = @$_GET['sort'];
 ordered_display($areas, $sort);
 echo "
 </ul>

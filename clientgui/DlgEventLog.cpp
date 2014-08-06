@@ -36,8 +36,12 @@
 #include "DlgEventLogListCtrl.h"
 #include "DlgEventLog.h"
 #include "AdvancedFrame.h"
+#include "DlgDiagnosticLogFlags.h"
 #include <wx/display.h>
 
+#ifdef __WXMAC__
+#include <time.h>
+#endif
 
 ////@begin includes
 ////@end includes
@@ -52,6 +56,7 @@
 
 
 static bool s_bIsFiltered = false;
+static bool s_bFilteringChanged = false;
 static std::string s_strFilteredProjectName;
 
 /*!
@@ -72,9 +77,11 @@ BEGIN_EVENT_TABLE( CDlgEventLog, wxDialog )
     EVT_BUTTON(ID_COPYSELECTED, CDlgEventLog::OnMessagesCopySelected)
     EVT_BUTTON(ID_TASK_MESSAGES_FILTERBYPROJECT, CDlgEventLog::OnMessagesFilter)
     EVT_BUTTON(ID_SIMPLE_HELP, CDlgEventLog::OnButtonHelp)
+	EVT_MENU(ID_SGDIAGNOSTICLOGFLAGS, CDlgEventLog::OnDiagnosticLogFlags)
 	EVT_SIZE(CDlgEventLog::OnSize)
     EVT_MOVE(CDlgEventLog::OnMove)
     EVT_CLOSE(CDlgEventLog::OnClose)
+    EVT_LIST_COL_END_DRAG(ID_SIMPLE_MESSAGESVIEW, CDlgEventLog::OnColResize)
 ////@end CDlgEventLog event table entries
 END_EVENT_TABLE()
 
@@ -95,9 +102,6 @@ CDlgEventLog::CDlgEventLog( wxWindow* parent, wxWindowID id, const wxString& cap
 CDlgEventLog::~CDlgEventLog() {
     wxLogTrace(wxT("Function Start/End"), wxT("CDlgEventLog::CDlgEventLog - Destructor Function Begin"));
     
-    SaveState();
-    SetWindowDimensions();
-
     if (m_pMessageInfoAttr) {
         delete m_pMessageInfoAttr;
         m_pMessageInfoAttr = NULL;
@@ -219,10 +223,7 @@ bool CDlgEventLog::Create( wxWindow* parent, wxWindowID id, const wxString& capt
     SetTitle(strCaption);
 
     // Initialize Application Icon
-    wxIconBundle icons;
-    icons.AddIcon(*pSkinAdvanced->GetApplicationIcon());
-    icons.AddIcon(*pSkinAdvanced->GetApplicationIcon32());
-    SetIcons(icons);
+    SetIcons(*pSkinAdvanced->GetApplicationIcon());
 
     CreateControls();
 
@@ -256,6 +257,13 @@ bool CDlgEventLog::Create( wxWindow* parent, wxWindowID id, const wxString& capt
     SetTextColor();
     RestoreState();
     OnRefresh();
+    // Register that we had the Event Log open immediately
+    SaveState();
+    
+    m_Shortcuts[0].Set(wxACCEL_CTRL|wxACCEL_SHIFT, (int)'F', ID_SGDIAGNOSTICLOGFLAGS);
+    m_pAccelTable = new wxAcceleratorTable(1, m_Shortcuts);
+
+    SetAcceleratorTable(*m_pAccelTable);
 
     return true;
 }
@@ -410,6 +418,9 @@ void CDlgEventLog::OnHelp(wxHelpEvent& event) {
  */
 
 void CDlgEventLog::OnOK( wxCommandEvent& WXUNUSED(event) ) {
+    SaveState();
+    SetWindowDimensions();
+
     Close();
 }
 
@@ -420,6 +431,10 @@ void CDlgEventLog::OnOK( wxCommandEvent& WXUNUSED(event) ) {
 
 void CDlgEventLog::OnClose(wxCloseEvent& WXUNUSED(event)) {
     m_bEventLogIsOpen = false;  // User specifically closed window
+
+    SaveState();
+    SetWindowDimensions();
+
     Destroy();
 }
 
@@ -458,6 +473,7 @@ void CDlgEventLog::OnMessagesFilter( wxCommandEvent& WXUNUSED(event) ) {
         }
     }
     
+    s_bFilteringChanged = true;
     SetFilterButtonText();
     
     // Force a complete update
@@ -615,15 +631,22 @@ void CDlgEventLog::OnRefresh() {
             }
         }
 
-        if ((iRowCount > 1) && (m_iPreviousLastMsgSeqNum != pDoc->GetLastMsgSeqNum())) {
-            if (EnsureLastItemVisible()) {
+        if (iRowCount > 1) {
+            if (s_bFilteringChanged) {
                 m_pList->EnsureVisible(iRowCount - 1);
-            } else if (topItem > 0) {
-                int n = topItem - m_iNumDeletedFilteredRows;
-                if (n < 0) n = 0;
-                Freeze();   // Avoid flicker if selected rows are visible
-                m_pList->EnsureVisible(n);
-                Thaw();
+                s_bFilteringChanged = false;
+            } else {
+                if (m_iPreviousLastMsgSeqNum != pDoc->GetLastMsgSeqNum()) {
+                    if (EnsureLastItemVisible()) {
+                        m_pList->EnsureVisible(iRowCount - 1);
+                    } else if (topItem > 0) {
+                        int n = topItem - m_iNumDeletedFilteredRows;
+                        if (n < 0) n = 0;
+                        Freeze();   // Avoid flicker if selected rows are visible
+                        m_pList->EnsureVisible(n);
+                        Thaw();
+                    }
+                }
             }
         }
 
@@ -758,6 +781,9 @@ void CDlgEventLog::GetWindowDimensions( wxPoint& position, wxSize& size ) {
     pConfig->Read(wxT("Width"), &iWidth, 640);
     pConfig->Read(wxT("Height"), &iHeight, 480);
 
+    // Guard against a rare situation where registry values are zero
+    if (iWidth < 50) iWidth = 640;
+    if (iHeight < 50) iHeight = 480;
     position.y = iTop;
     position.x = iLeft;
     size.x = iWidth;
@@ -885,7 +911,23 @@ void CDlgEventLog::OnButtonHelp( wxCommandEvent& event ) {
 }
 
 
+void CDlgEventLog::OnDiagnosticLogFlags(wxCommandEvent& WXUNUSED(event)) {
+    wxLogTrace(wxT("Function Start/End"), wxT("CDlgEventLog::OnDiagnosticLogFlags - Function Begin"));
+
+    CDlgDiagnosticLogFlags dlg(this);
+	dlg.ShowModal();
+
+    wxLogTrace(wxT("Function Start/End"), wxT("CDlgEventLog::OnDiagnosticLogFlags - Function End"));
+}
+
+
+void CDlgEventLog::OnColResize( wxListEvent& ) {
+    // Register the new column widths immediately
+    SaveState();
+}
+
 void CDlgEventLog::ResetMessageFiltering() {
+    s_bFilteringChanged = false;
     s_bIsFiltered = false;
     s_strFilteredProjectName.clear();
     m_iFilteredIndexes.Clear();
@@ -987,12 +1029,20 @@ wxInt32 CDlgEventLog::FormatProjectName(wxInt32 item, wxString& strBuffer) const
 
 
 wxInt32 CDlgEventLog::FormatTime(wxInt32 item, wxString& strBuffer) const {
-    wxDateTime dtBuffer;
     MESSAGE*   message = wxGetApp().GetDocument()->message(item);
 
     if (message) {
+#ifdef __WXMAC__
+        // Work around a wxCocoa bug(?) in wxDateTime::Format()
+        char buf[80];
+        struct tm * timeinfo = localtime((time_t*)&message->timestamp);
+        strftime(buf, sizeof(buf), "%c", timeinfo);
+        strBuffer = buf;
+#else
+        wxDateTime dtBuffer;
         dtBuffer.Set((time_t)message->timestamp);
         strBuffer = dtBuffer.Format();
+#endif
     }
 
     return 0;
@@ -1004,7 +1054,8 @@ wxInt32 CDlgEventLog::FormatMessage(wxInt32 item, wxString& strBuffer) const {
     
     if (message) {
         strBuffer = wxString(message->body.c_str(), wxConvUTF8);
-        wxGetApp().GetDocument()->LocalizeNoticeText(strBuffer, false, true);
+        remove_eols(strBuffer);
+        localize(strBuffer);
     }
 
     return 0;

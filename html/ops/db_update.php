@@ -853,6 +853,94 @@ function update_5_23_2013() {
     do_query("alter table host add product_name varchar(254) not null");
 }
 
+function update_9_10_2013() {
+    do_query("alter table workunit change mod_time mod_time timestamp default current_timestamp on update current_timestamp");
+    do_query("alter table result change mod_time mod_time timestamp default current_timestamp on update current_timestamp");
+}
+
+function update_9_17_2013() {
+    do_query("alter table batch add expire_time double not null");
+}
+
+function update_12_22_2013() {
+    do_query("
+        create table badge (
+            id                      serial          primary key,
+            create_time             double          not null,
+            type                    tinyint         not null,
+            name                    varchar(255)    not null,
+            title                   varchar(255)    not null,
+            description             varchar(255)    not null,
+            image_url               varchar(255)    not null,
+            level                   varchar(255)    not null,
+            tags                    varchar(255)    not null,
+            sql_rule                varchar(255)    not null
+        )
+    ");
+    do_query("
+        create table badge_user (
+            badge_id                integer         not null,
+            user_id                 integer         not null,
+            create_time             double          not null,
+            reassign_time           double          not null
+        )
+    ");
+    do_query("
+        create table badge_team (
+            badge_id                integer         not null,
+            team_id                 integer         not null,
+            create_time             double          not null,
+            reassign_time           double          not null
+        )
+    ");
+    do_query("
+        alter table badge_user
+            add unique (user_id, badge_id)
+    ");
+    do_query("
+        alter table badge_team
+            add unique (team_id, badge_id)
+    ");
+}
+
+function update_1_13_2014() {
+    do_query(
+        "alter table user_submit add max_jobs_in_progress integer not null"
+    );
+}
+
+function update_3_6_2014() {
+    do_query(
+        "alter table host add gpu_active_frac double not null"
+    );
+}
+
+function update_4_2_2014() {
+    do_query(
+        "alter table result 
+            add peak_working_set_size double not null,
+            add peak_swap_size double not null,
+            add peak_disk_usage double not null
+        "
+    );
+}
+
+function update_5_3_2014() {
+    do_query(
+        "alter table app
+            add fraction_done_exact tinyint not null
+        "
+    );
+}
+
+function update_6_5_2014() {
+    do_query(
+        "alter table app_version
+            add beta tinyint not null
+        "
+    );
+}
+
 // Updates are done automatically if you use "upgrade".
 //
 // If you need to do updates manually,
@@ -887,6 +975,14 @@ $db_updates = array (
     array(27000, "update_11_25_2012"),
     array(27001, "update_4_26_2013"),
     array(27002, "update_5_23_2013"),
+    array(27003, "update_9_10_2013"),
+    array(27004, "update_9_17_2013"),
+    array(27005, "update_12_22_2013"),
+    array(27006, "update_1_13_2014"),
+    array(27007, "update_3_6_2014"),
+    array(27008, "update_4_2_2014"),
+    array(27009, "update_5_3_2014"),
+    array(27010, "update_6_5_2014"),
 );
 
 ?>

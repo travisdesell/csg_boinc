@@ -16,6 +16,8 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with BOINC.  If not, see <http://www.gnu.org/licenses/>.
 
+// TODO: most of this code shouldn't exist.
+
 error_reporting(E_ALL);
 ini_set('display_errors', true);
 ini_set('display_startup_errors', true);
@@ -23,7 +25,7 @@ ini_set('display_startup_errors', true);
 require_once("../inc/result.inc");
 
 class BoincAssignment {
-    static function enum($where_clause) {
+    static function enum($where_clause = null) {
         $db = BoincDb::get();
         return $db->enum('assignment', 'BoincAssignment', $where_clause);
     }
@@ -578,7 +580,7 @@ function server_state_select() {
         <select name=\"server_state\">
         <option value=\"CHOOSE_ALL\" selected=\"selected\"> Any </option>
     ";
-    for($i=1; $i<6; $i++) {
+    for ($i=1; $i<6; $i++) {
         $res = new StdClass;
         $res->server_state=$i;
         echo "<option value=\"$i\"> "."[$i]&nbsp;&nbsp;".'   '.result_server_state_string($res)."</option>\n";
@@ -591,7 +593,7 @@ function outcome_select() {
         <select name=\"outcome\">
         <option value=\"CHOOSE_ALL\" selected=\"selected\"> Any </option>
     ";
-    for($i=0; $i<8; $i++) {
+    for ($i=0; $i<8; $i++) {
         $res = new StdClass;
         $res->outcome = $i;
         $res->exit_status = 0;
@@ -605,11 +607,11 @@ function validate_state_select() {
         <select name=\"validate_state\">
         <option value=\"CHOOSE_ALL\" selected=\"selected\"> Any </option>
         ";
-    for($i=0; $i<NVALIDATE_STATES; $i++) {
+    for ($vs=0; $vs<NVALIDATE_STATES; $vs++) {
         $res = new StdClass;
         $res->validate_state = $vs;
         $res->exit_status = 0;
-        echo "<option value=\"$i\"> "."[$i]&nbsp;&nbsp;".'   '.validate_state_str($res)."</option>\n";
+        echo "<option value=\"$vs\"> "."[$vs]&nbsp;&nbsp;".'   '.validate_state_str($res)."</option>\n";
     }
     echo "</select>\n";
 }
@@ -619,7 +621,7 @@ function client_state_select() {
         <select name=\"client_state\">
         <option value=\"CHOOSE_ALL\" selected=\"selected\"> Any </option>
     ";
-    for($i=0; $i<7; $i++) {
+    for ($i=0; $i<7; $i++) {
         $res = new StdClass;
         $res->client_state = $i;
         $res->exit_status = 0;
@@ -651,7 +653,8 @@ function sort_order_select() {
         <select name=\"sort_by_order\">
         <option value=\"asc\">Ascending
         <option value=\"desc\" selected>Descending
-        </select>\n";
+        </select>
+    ";
 }
 
 function table_title($table) {
@@ -700,10 +703,10 @@ function show_app_version($app_version) {
     row("Version num", $app_version->version_num);
     row("Platform", "<a href=\"db_action.php?table=platform&id=$app_version->platformid\">" . platform_name_by_id($app_version->platformid) . "</a>" );
     row("XML doc", "<pre>".htmlspecialchars($app_version->xml_doc)."</pre>");
-    row("Min_core_version", $app_version->min_core_version);
-    row("Max_core_version", $app_version->max_core_version);
-    //row("Message", $app_version->message);
-    row("Deprecated", $app_version->deprecated);
+    row("min_core_version", $app_version->min_core_version);
+    row("max_core_version", $app_version->max_core_version);
+    row("deprecated", $app_version->deprecated);
+    row("plan_class", $app_version->plan_class);
     end_table();
 }
 
@@ -750,9 +753,10 @@ function show_host_short($host) {
         <tr>
         <td><a href=\"db_action.php?table=host&id=$host->id\">$host->id</a></td>
         <td>$host->last_ip_addr</td>
-        <td>$host->domain_name</td>";
-       printf("<td>%.2f</td>", $host->expavg_credit);
-       printf("<td>%.1f</td>", $host->total_credit);
+        <td>$host->domain_name</td>
+    ";
+    printf("<td>%.2f</td>", $host->expavg_credit);
+    printf("<td>%.1f</td>", $host->total_credit);
     echo "<td>$host->p_vendor $host->p_model</td>
         <td>$host->os_name $host->os_version</td>
         </tr>
@@ -943,7 +947,7 @@ function show_workunit_short($wu) {
 }
 
 function host_user_link($hostid) {
-    if (!$hostid) return '----';
+    if (!$hostid) return '---';
 
     $h = "<a href=\"db_action.php?table=host&id=$hostid\">$hostid</a>";
     $result = mysql_query("select userid from host where id='$hostid' limit 1");
@@ -960,8 +964,8 @@ function host_user_link($hostid) {
 
 function validate_color($validate_state) {
     switch ($validate_state) {
-       case 1: return '33cc33'; // valid, green
-       case 2: return 'ffa500'; // invalid result, orange
+   case 1: return '33cc33'; // valid, green
+   case 2: return 'ffa500'; // invalid result, orange
     }
     return '';
 }
@@ -1000,7 +1004,7 @@ function show_result_ops($result) {
     row("Server state", result_server_state_string($result)." [$result->server_state]");
     row("Outcome", result_outcome_string($result)." [$result->outcome]");
     row("Client state", result_client_state_string($result)." [$result->client_state]");
-    row("Exit status", exit_status_string($result));
+    row("Exit status", exit_status_string($result->exit_status));
     row("Host ID", "<a href=\"db_action.php?table=host&id=$result->hostid\">" . host_name_by_id($result->hostid) . "</a> [$result->hostid]");
     row("User ID", "<a href=\"db_action.php?table=user&id=$result->userid\">" . user_name_by_id($result->userid) . "</a> [$result->userid]");
     row("CPU time", $result->cpu_time);
@@ -1011,10 +1015,15 @@ function show_result_ops($result) {
     row("Batch", $result->batch);
     row("File delete state", file_delete_state_str($result->file_delete_state)." [$result->file_delete_state]");
     row("Validate state", validate_state_str($result)." [$result->validate_state]");
-    row("claimed credit", $result->claimed_credit);
     row("Granted credit", $result->granted_credit);
     row("Application", "<a href=\"db_action.php?table=app&id=$result->appid\">".app_name_by_id($result->appid)."</a>");
-    row("App version", "<a href=\"db_action.php?table=app_version&appid=$result->appid&clauses=version_num%3D$result->app_version_num\">".$result->app_version_num."</a>");
+    if ($result->app_version_id > 0) {
+        $x1 = "<a href=\"db_action.php?table=app_version&amp;id=$result->app_version_id\">";
+        $x2 = "</a>";
+    } else {
+        $x1 = $x2 = "";
+    }
+    row("App version", $x1.app_version_string($result).$x2);
     row("App version ID", $result->app_version_id);
     row("Estimated GFLOPS", number_format($result->flops_estimate/1e9, 2));
     row("Random",$result->random);
@@ -1048,7 +1057,6 @@ function result_short_header() {
         <th>app<br>ver</th>
         <th>received <br><i>or</i> <font color=\"#ff3333\">dead</font><font color=\"#33cc33\">line</font> <br><i>or</i> <font color=\"#9900cc\">created</font></th>
         <th>CPU<br>hours</th>
-        <th>claimed<br>credit</th>
         <th>granted<br>credit</th>
         </tr>
     ";
@@ -1063,9 +1071,9 @@ function show_result_short($result) {
         $cs = result_client_state_string($result);
         $oc = "$oc ($cs)";
     }
-    if ($result->received_time)
+    if ($result->received_time) {
         $received = time_str($result->received_time);
-    else {
+    } else {
         // result has not been received yet, so show report deadline either
         // in green if in the future or in red if in the past.
         $timenow=time();
@@ -1080,16 +1088,11 @@ function show_result_short($result) {
             $received = "<font color=\"#ff3333\">". time_str($result->report_deadline) . "</font>";
         }
     }
-    $version = sprintf("%.2f", $result->app_version_num/100);
-    $av = BoincAppVersion::lookup_id($result->app_version_id);
-    if ($av) {
-        $version .= " [$av->plan_class]";
-    }
+    $version = app_version_string($result);
     $outcome_color = outcome_color($result->outcome);
     $validate_color = validate_color($result->validate_state);
     $host_user = host_user_link($result->hostid);
     $cpu_hours = sprintf("%.1f",$result->cpu_time / 3600);
-    $claimed_credit = credit_str($result->claimed_credit);
     $granted_credit = "<a href=credit.php?resultid=$result->id>".credit_str($result->granted_credit)."</a>";
     $delete_state = file_delete_state_str($result->file_delete_state);
 
@@ -1102,12 +1105,11 @@ function show_result_short($result) {
         <td>$cs2</td>
         <td bgcolor=$validate_color>$vs</td>
         <td>$delete_state</td>
-        <td>", exit_status_string($result), "</td>
+        <td>", exit_status_string($result->exit_status), "</td>
         <td>$host_user</td>
         <td>$version</td>
         <td>$received</td>
         <td>$cpu_hours</td>
-        <td>$claimed_credit</td>
         <td>$granted_credit</td>
         </tr>
     ";
@@ -1167,10 +1169,12 @@ function show_user_summary($maxuser) {
             <td><h2>top10 Poster</h2></td>
             <td><h2>top$maxuser Countries</h2></td>
             <td><h2>top$maxuser Languages</h2></td>
-          </tr>";
+          </tr>
+    ";
     echo "<tr valign=\"top\">";
     echo "<td><table border=\"1\">
-          <tr><th>&nbsp;</th><th>&nbsp;</th></tr>";
+          <tr><th>&nbsp;</th><th>&nbsp;</th></tr>
+    ";
     row2_plain("Users:", $stats['maxuser']);
     row2_plain("Profiles:", $stats['profuser']);
     row2_plain("Team members:", $stats['teamuser']);
@@ -1178,8 +1182,7 @@ function show_user_summary($maxuser) {
     echo "<td><table border=\"2\">\n";
     echo "<tr><th>User</th><th># posts</th></tr>\n";
     for ($p=1; $p<=10; $p++) {
-        row2_plain(user_links_ops($top10poster[$p]),
-             $top10poster[$p]->posts);
+        row2_plain(user_links_ops($top10poster[$p]), $top10poster[$p]->posts);
     }
     echo "</table></td>";
     echo "<td><table border=\"2\">\n";
@@ -1236,6 +1239,7 @@ function team_name_by_id($teamid) {
 function user_name_by_id($user_id) {
     $result = mysql_query("select * from user where id = $user_id");
     $user = mysql_fetch_object($result);
+    if (!$user) return "No user";
     return $user->name;
 }
 
@@ -1248,6 +1252,7 @@ function app_name_by_id($appid) {
 function wu_name_by_id($workunitid) {
     $result = mysql_query("select * from workunit where id = $workunitid");
     $wu = mysql_fetch_object($result);
+    if (!$wu) return "Missing workunit";
     return $wu->name;
 }
 
@@ -1260,6 +1265,7 @@ function platform_name_by_id($platformid) {
 function host_name_by_id($hostid) {
     $result = mysql_query("select * from host where id = $hostid");
     $host = mysql_fetch_object($result);
+    if (!$host) return "No host";
     if (!strlen($host->domain_name) && !strlen($host->last_ip_addr)) {
         return "(blank)";
     } else {

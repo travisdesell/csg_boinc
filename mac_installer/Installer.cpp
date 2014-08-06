@@ -30,6 +30,9 @@
 #include <sys/param.h>  // for MAXPATHLEN
 #include <sys/stat.h>
 
+#include "str_util.h"
+#include "str_replace.h"
+#include "translate.h"
 
 #define boinc_master_user_name "boinc_master"
 #define boinc_master_group_name "boinc_master"
@@ -38,40 +41,41 @@
 
 void Initialize(void);	/* function prototypes */
 Boolean IsUserMemberOfGroup(const char *userName, const char *groupName);
-OSStatus GetFinalAction(CFStringRef *restartValue);
-OSErr FindProcess (OSType typeToFind, OSType creatorToFind, ProcessSerialNumberPtr processSN);
+Boolean IsRestartNeeded();
+static void GetPreferredLanguages();
+static void LoadPreferredLanguages();
+static void ShowMessage(const char *format, ...);
+static int compareOSVersionTo(int toMajor, int toMinor);
 static OSErr QuitAppleEventHandler(const AppleEvent *appleEvt, AppleEvent* reply, UInt32 refcon);
 void print_to_log_file(const char *format, ...);
 void strip_cr(char *buf);
 
+// We can't use translation because the translation catalogs
+// have not yet been installed when this application is run.
+#define MAX_LANGUAGES_TO_TRY 5
+
+static char * Catalog_Name = (char *)"BOINC-Setup";
+static char * Catalogs_Dir = (char *)"/tmp/BOINC_payload/Library/Application Support/BOINC Data/locale/";
+
 Boolean			gQuitFlag = false;	/* global */
 
+#if 0
 CFStringRef     valueRestartRequired = CFSTR("RequiredRestart");
 CFStringRef     valueLogoutRequired = CFSTR("RequiredLogout");
 CFStringRef     valueNoRestart = CFSTR("NoRestart");
-
+#endif
 
 int main(int argc, char *argv[])
 {
-    char                    pkgPath[MAXPATHLEN], infoPlistPath[MAXPATHLEN], MetaPkgPath[MAXPATHLEN];
+    char                    pkgPath[MAXPATHLEN];
+    char                    temp[MAXPATHLEN];
     char                    brand[64], s[256];
     char                    *p;
-    ProcessSerialNumber     ourPSN, installerPSN;
+    ProcessSerialNumber     ourPSN;
     FSRef                   ourFSRef;
-    long                    response;
-    short                   itemHit;
-    pid_t                   installerPID = 0;
-    FSRef                   infoPlistFileRef;
-    Boolean                 isDirectory, result;
-    CFURLRef                xmlURL = NULL;
-    CFDataRef               xmlDataIn = NULL;
-    CFDataRef               xmlDataOut = NULL;
-    CFPropertyListRef       propertyListRef = NULL;
-    CFStringRef             restartKey = CFSTR("IFPkgFlagRestartAction");
-    CFStringRef             currentValue = NULL, desiredValue = NULL;
-    CFStringRef             errorString = NULL;
     OSStatus                err = noErr;
-    struct stat             stat_buf;
+    Boolean                 restartNeeded = true;
+    FILE                    *restartNeededFile;
 
     Initialize();
 
@@ -83,14 +87,14 @@ int main(int argc, char *argv[])
     if (err == noErr)
         err = FSRefMakePath (&ourFSRef, (UInt8*)pkgPath, sizeof(pkgPath));
 
-    strlcpy(infoPlistPath, pkgPath, sizeof(infoPlistPath));
+    strlcpy(temp, pkgPath, sizeof(temp));
 
     strlcat(pkgPath, "/Contents/Resources/", sizeof(pkgPath));
 
    // To allow for branding, assume name of installer package inside bundle corresponds to name of this application
-    p = strrchr(infoPlistPath, '/');         // Point to name of this application (e.g., "BOINC Installer.app")
+    p = strrchr(temp, '/');         // Point to name of this application (e.g., "BOINC Installer.app")
     if (p == NULL)
-        p = infoPlistPath - 1;
+        p = temp - 1;
     strlcpy(brand, p+1, sizeof(brand));
     strlcat(pkgPath, p+1, sizeof(pkgPath));
     p = strrchr(pkgPath, ' ');         // Strip off last space character and everything following
@@ -100,108 +104,69 @@ int main(int argc, char *argv[])
     p = strstr(brand, " Installer.app");  // Strip off trailing " Installer.app"
     if (p)
         *p = '\0'; 
-
-    strlcpy(MetaPkgPath, pkgPath, sizeof(MetaPkgPath));
-    strlcat(MetaPkgPath, "+VirtualBox.mpkg", sizeof(MetaPkgPath));
+    
     strlcat(pkgPath, ".pkg", sizeof(pkgPath));
-    err = Gestalt(gestaltSystemVersion, &response);
-    if (err != noErr)
-        return err;
+    // Expand the installer package
+    system("rm -dfR /tmp/BOINC.pkg");
+    system("rm -dfR /tmp/expanded_BOINC.pkg");
+    sprintf(temp, "pkgutil --expand \"%s\" /tmp/expanded_BOINC.pkg", pkgPath);
+    err = system(temp);
 
-    if (response < 0x1040) {
+    if (err == noErr) {
+        GetPreferredLanguages();
+    }
+    if (compareOSVersionTo(10, 5) < 0) {
+        LoadPreferredLanguages();
         ::SetFrontProcess(&ourPSN);
         p = strrchr(brand, ' ');         // Strip off last space character and everything following
         if (p)
             *p = '\0'; 
-        s[0] = sprintf(s+1, "Sorry, this version of %s requires system 10.4 or higher.", brand);
-        StandardAlert (kAlertStopAlert, (StringPtr)s, NULL, NULL, &itemHit);
+        ShowMessage((char *)_("Sorry, this version of %s requires system 10.5 or higher."), brand);
 
-        err = FindProcess ('APPL', 'xins', &installerPSN);
-        err = GetProcessPID(&installerPSN , &installerPID);
-
-        if (err == noErr)
-            err = kill(installerPID, SIGKILL);
-
-	ExitToShell();
+        system("rm -dfR /tmp/BOINC_payload");
+        return -1;
     }
 
+    system("rm -dfR /tmp/BOINC_payload");
+
     // Remove previous installer package receipt so we can run installer again
+    // (affects only older versions of OS X and fixes a bug in those versions)
     // "rm -rf /Library/Receipts/GridRepublic.pkg"
     sprintf(s, "rm -rf \"/Library/Receipts/%s.pkg\"", brand);
     system (s);
 
-    err = Gestalt(gestaltSystemVersion, &response);
-    if (err != noErr)
-        return err;
+    restartNeeded = IsRestartNeeded();
     
-    err = GetFinalAction(&desiredValue);
-    
-    strlcpy(infoPlistPath, pkgPath, sizeof(infoPlistPath));
-    strlcat(infoPlistPath, "/Contents/Info.plist", sizeof(infoPlistPath));
-
-    err = FSPathMakeRef((UInt8*)infoPlistPath, &infoPlistFileRef, &isDirectory);
-    if (err)
-        return err;
-        
-    xmlURL = CFURLCreateFromFSRef(NULL, &infoPlistFileRef);
-    if (xmlURL == NULL)
-        return -1;
-
-    // Read XML Data from file
-    result = CFURLCreateDataAndPropertiesFromResource(NULL, xmlURL, &xmlDataIn, NULL, NULL, &err);
-    if (err == noErr)
-        if (!result)
-            err = coreFoundationUnknownErr;
-	
-    if (err == noErr) { // Convert XML Data to internal CFPropertyListRef / CFDictionaryRef format
-        propertyListRef = CFPropertyListCreateFromXMLData(NULL, xmlDataIn, kCFPropertyListMutableContainersAndLeaves, &errorString);
-        if (propertyListRef == NULL)
-            err = coreFoundationUnknownErr;
+    // Write a temp file to tell our PostInstall.app whether restart is needed
+    restartNeededFile = fopen("/tmp/BOINC_restart_flag", "w");
+    if (restartNeededFile) {
+        fputs(restartNeeded ? "1\n" : "0\n", restartNeededFile);
+        fclose(restartNeededFile);
     }
     
-    if (err == noErr) { // Get current value for our key
-        currentValue = (CFStringRef)CFDictionaryGetValue((CFDictionaryRef)propertyListRef, restartKey);
-        if (currentValue == NULL)
-            err = coreFoundationUnknownErr;
-    }    
-    
-    if (err == noErr) {
-        if (CFStringCompare(currentValue, desiredValue, 0) != kCFCompareEqualTo) {  // If current value != desired value
-            // Replace value for key with desired value
-            CFDictionaryReplaceValue((CFMutableDictionaryRef)propertyListRef, restartKey, desiredValue);
-
-            // Convert internal CFPropertyListRef / CFDictionaryRef format to XML data
-            xmlDataOut = CFPropertyListCreateXMLData(NULL, propertyListRef);
-            if (xmlDataOut == NULL)
-                err = coreFoundationUnknownErr;
-
-            if (err == noErr) { // Write revised XML Data back to the file
-                result = CFURLWriteDataAndPropertiesToResource (xmlURL, xmlDataOut, NULL, &err);
-                if (err == noErr)
-                    if (!result)
-                        err = coreFoundationUnknownErr;
-            }
+    if (restartNeeded) {
+        if (err == noErr) {
+            // Change onConclusion="none" to onConclusion="RequireRestart"
+            err = system("sed -i \"\" s/\"onConclusion=\\\"none\\\"\"/\"onConclusion=\\\"RequireRestart\\\"\"/g /tmp/expanded_BOINC.pkg/Distribution");
         }
-    } 
-   
-    if (xmlURL)
-        CFRelease(xmlURL);
-    if (xmlDataIn)
-        CFRelease(xmlDataIn);
-    if (xmlDataOut)
-        CFRelease(xmlDataOut);
-    if (propertyListRef)
-        CFRelease(propertyListRef);
-
-    if (err == noErr) {
-        if ((response < 0x1050) || stat(MetaPkgPath, &stat_buf)) {  // stat() returns zero on success
-            sprintf(infoPlistPath, "open \"%s\" &", pkgPath);
-        } else {
-            sprintf(infoPlistPath, "open \"%s\" &", MetaPkgPath);
+        if (err == noErr) {
+            // Flatten the installer package
+            sprintf(temp, "pkgutil --flatten /tmp/expanded_BOINC.pkg /tmp/%s.pkg", brand);
+            err = system(temp);
+            
+            system("rm -fR /tmp/expanded_BOINC.pkg");
         }
-        system(infoPlistPath);
+
+        if (err == noErr) {
+            sprintf(temp, "open \"/tmp/%s.pkg\" &", brand);
+            system(temp);
+            return 0;
+        }
     }
 
+    sprintf(temp, "open \"%s\" &", pkgPath);
+    system(temp);
+    
     return err;
 }
 
@@ -228,71 +193,65 @@ Boolean IsUserMemberOfGroup(const char *userName, const char *groupName) {
 }
 
 
-OSStatus GetFinalAction(CFStringRef *restartValue)
+Boolean IsRestartNeeded()
 {
     passwd          *pw = NULL;
     group           *grp = NULL;
     gid_t           boinc_master_gid = 0, boinc_project_gid = 0;
     uid_t           boinc_master_uid = 0, boinc_project_uid = 0;
-    OSStatus        err = noErr;
-    long            response;
     char            loginName[256];
     
-    *restartValue = valueRestartRequired;
-
     grp = getgrnam(boinc_master_group_name);
     if (grp == NULL)
-        return noErr;       // Group boinc_master does not exist
+        return true;       // Group boinc_master does not exist
 
     boinc_master_gid = grp->gr_gid;
         
     grp = getgrnam(boinc_project_group_name);
     if (grp == NULL)
-        return noErr;       // Group boinc_project does not exist
+        return true;       // Group boinc_project does not exist
 
     boinc_project_gid = grp->gr_gid;
 
     pw = getpwnam(boinc_master_user_name);
     if (pw == NULL)
-        return noErr;       // User boinc_master does not exist
+        return true;       // User boinc_master does not exist
 
     boinc_master_uid = pw->pw_uid;
 
     if (pw->pw_gid != boinc_master_gid)
-        return noErr;       // User boinc_master does not have group boinc_master as its primary group
+        return true;       // User boinc_master does not have group boinc_master as its primary group
     
     pw = getpwnam(boinc_project_user_name);
     if (pw == NULL)
-        return noErr;       // User boinc_project does not exist
+        return true;       // User boinc_project does not exist
 
     boinc_project_uid = pw->pw_uid;
         
     if (pw->pw_gid != boinc_project_gid)
-        return noErr;       // User boinc_project does not have group boinc_project as its primary group
+        return true;       // User boinc_project does not have group boinc_project as its primary group
 
-    err = Gestalt(gestaltSystemVersion, &response);
-    if ((err == noErr) && (response >= 0x1050)) {
+    if (compareOSVersionTo(10, 5) >= 0) {
         if (boinc_master_gid < 501)
-            return noErr;       // We will change boinc_master_gid to a value > 501
+            return true;       // We will change boinc_master_gid to a value > 501
         if (boinc_project_gid < 501)
-            return noErr;       // We will change boinc_project_gid to a value > 501
+            return true;       // We will change boinc_project_gid to a value > 501
         if (boinc_master_uid < 501)
-            return noErr;       // We will change boinc_master_uid to a value > 501
+            return true;       // We will change boinc_master_uid to a value > 501
         if (boinc_project_uid < 501)
-            return noErr;       // We will change boinc_project_uid to a value > 501
+            return true;       // We will change boinc_project_uid to a value > 501
 }
     
     #ifdef SANDBOX
     strncpy(loginName, getenv("USER"), sizeof(loginName)-1);
     if (loginName[0]) {
         if (IsUserMemberOfGroup(loginName, boinc_master_group_name)) {
-            *restartValue = valueNoRestart;
-            return noErr;   // Logged in user is already a member of group boinc_master
+            return false;   // Logged in user is already a member of group boinc_master
         }
     }
 #endif  // SANDBOX
 
-    return noErr;
+    return true;
 }
 
 
@@ -308,34 +267,217 @@ void Initialize()	/* Initialize some managers */
 }
 
 
-// ---------------------------------------------------------------------------
-/* This runs through the process list looking for the indicated application */
-/*  Searches for process by file type and signature (creator code)          */
-// ---------------------------------------------------------------------------
-OSErr FindProcess (OSType typeToFind, OSType creatorToFind, ProcessSerialNumberPtr processSN)
-{
-    ProcessInfoRec tempInfo;
-    FSSpec procSpec;
-    Str31 processName;
-    OSErr myErr = noErr;
-    /* null out the PSN so we're starting at the beginning of the list */
-    processSN->lowLongOfPSN = kNoProcess;
-    processSN->highLongOfPSN = kNoProcess;
-    /* initialize the process information record */
-    tempInfo.processInfoLength = sizeof(ProcessInfoRec);
-    tempInfo.processName = processName;
-    tempInfo.processAppSpec = &procSpec;
-    /* loop through all the processes until we */
-    /* 1) find the process we want */
-    /* 2) error out because of some reason (usually, no more processes) */
-    do {
-        myErr = GetNextProcess(processSN);
-        if (myErr == noErr)
-            GetProcessInformation(processSN, &tempInfo);
+// Because language preferences are set on a per-user basis, we
+// must get the preferred languages while set to the current 
+// user, before the Apple Installer switches us to root.
+// So we get the preferred languages here and write them to a
+// temporary file to be retrieved by our PostInstall app.
+static void GetPreferredLanguages() {
+    DIR *dirp;
+    struct dirent *dp;
+    char searchPath[MAXPATHLEN];
+    char savedWD[MAXPATHLEN];
+    struct stat sbuf;
+    CFMutableArrayRef supportedLanguages;
+    CFStringRef aLanguage;
+    char shortLanguage[32];
+    CFArrayRef preferredLanguages;
+    int i, j, k;
+    char * language;
+    char *uscore;
+    FILE *f;
+
+
+    getcwd(savedWD, sizeof(savedWD));
+    system("rm -dfR /tmp/BOINC_payload");
+    mkdir("/tmp/BOINC_payload", 0777);
+    chdir("/tmp/BOINC_payload");
+    system("cpio -i < /tmp/expanded_BOINC.pkg/BOINC.pkg/Payload");
+    chdir(savedWD);
+
+    // Create an array of all our supported languages
+    supportedLanguages = CFArrayCreateMutable(kCFAllocatorDefault, 100, &kCFTypeArrayCallBacks);
+    
+    aLanguage = CFStringCreateWithCString(NULL, "en", kCFStringEncodingMacRoman);
+    CFArrayAppendValue(supportedLanguages, aLanguage);
+    CFRelease(aLanguage);
+    aLanguage = NULL;
+
+    dirp = opendir(Catalogs_Dir);
+    if (!dirp) goto cleanup;
+    while (true) {
+        dp = readdir(dirp);
+        if (dp == NULL)
+            break;                  // End of list
+
+        if (dp->d_name[0] == '.')
+            continue;               // Ignore names beginning with '.'
+
+        strlcpy(searchPath, Catalogs_Dir, sizeof(searchPath));
+        strlcat(searchPath, dp->d_name, sizeof(searchPath));
+        strlcat(searchPath, "/", sizeof(searchPath));
+        strlcat(searchPath, Catalog_Name, sizeof(searchPath));
+        strlcat(searchPath, ".mo", sizeof(searchPath));
+        if (stat(searchPath, &sbuf) != 0) continue;
+//        printf("Adding %s to supportedLanguages array\n", dp->d_name);
+        aLanguage = CFStringCreateWithCString(NULL, dp->d_name, kCFStringEncodingMacRoman);
+        CFArrayAppendValue(supportedLanguages, aLanguage);
+        CFRelease(aLanguage);
+        aLanguage = NULL;
+        
+        // If it has a region code ("it_IT") also try without region code ("it")
+        // TODO: Find a more general solution
+        strlcpy(shortLanguage, dp->d_name, sizeof(shortLanguage));
+        uscore = strchr(shortLanguage, '_');
+        if (uscore) {
+            *uscore = '\0';
+            aLanguage = CFStringCreateWithCString(NULL, shortLanguage, kCFStringEncodingMacRoman);
+            CFArrayAppendValue(supportedLanguages, aLanguage);
+            CFRelease(aLanguage);
+            aLanguage = NULL;
+        }
     }
-            while ((tempInfo.processSignature != creatorToFind || tempInfo.processType != typeToFind) &&
-                   myErr == noErr);
-    return(myErr);
+    
+    closedir(dirp);
+
+    // Write a temp file to tell our PostInstall.app our preferred languages
+    f = fopen("/tmp/BOINC_preferred_languages", "w");
+
+    for (i=0; i<MAX_LANGUAGES_TO_TRY; ++i) {
+    
+        preferredLanguages = CFBundleCopyLocalizationsForPreferences(supportedLanguages, NULL );
+        
+#if 0   // For testing
+        int c = CFArrayGetCount(preferredLanguages);
+        for (k=0; k<c; ++k) {
+        CFStringRef s = (CFStringRef)CFArrayGetValueAtIndex(preferredLanguages, k);
+            printf("Preferred language %u is %s\n", k, CFStringGetCStringPtr(s, kCFStringEncodingMacRoman));
+        }
+
+#endif
+
+        for (j=0; j<CFArrayGetCount(preferredLanguages); ++j) {
+            aLanguage = (CFStringRef)CFArrayGetValueAtIndex(preferredLanguages, j);
+            language = (char *)CFStringGetCStringPtr(aLanguage, kCFStringEncodingMacRoman);
+            if (f) {
+                fprintf(f, "%s\n", language);
+            }
+            
+            // Remove all copies of this language from our list of supported languages 
+            // so we can get the next preferred language in order of priority
+            for (k=CFArrayGetCount(supportedLanguages)-1; k>=0; --k) {
+                if (CFStringCompare(aLanguage, (CFStringRef)CFArrayGetValueAtIndex(supportedLanguages, k), 0) == kCFCompareEqualTo) {
+                    CFArrayRemoveValueAtIndex(supportedLanguages, k);
+                }
+            }
+
+            // Since the original strings are English, no 
+            // further translation is needed for language en.
+            if (!strcmp(language, "en")) {
+                fclose(f);
+                CFRelease(preferredLanguages);
+                preferredLanguages = NULL;
+                goto cleanup;
+            }
+        }
+        
+        CFRelease(preferredLanguages);
+        preferredLanguages = NULL;
+
+    }
+
+    fclose(f);
+
+cleanup:
+    CFArrayRemoveAllValues(supportedLanguages);
+    CFRelease(supportedLanguages);
+    supportedLanguages = NULL;
+}
+
+
+static void LoadPreferredLanguages(){
+    FILE *f;
+    int i;
+    char *p;
+    char language[32];
+
+    BOINCTranslationInit();
+
+    // GetPreferredLanguages() wrote a list of our preferred languages to a temp file
+    f = fopen("/tmp/BOINC_preferred_languages", "r");
+    if (!f) return;
+    
+    for (i=0; i<MAX_LANGUAGES_TO_TRY; ++i) {
+        fgets(language, sizeof(language), f);
+        if (feof(f)) break;
+        language[sizeof(language)-1] = '\0';    // Guarantee a null terminator
+        p = strchr(language, '\n');
+        if (p) *p = '\0';           // Replace newline with null terminator 
+        if (language[0]) {
+            if (!BOINCTranslationAddCatalog(Catalogs_Dir, language, Catalog_Name)) {
+                printf("could not load catalog for langage %s\n", language);
+            }
+        }
+    }
+    fclose(f);
+}
+
+
+static void ShowMessage(const char *format, ...) {
+  // CAUTION: vsprintf will produce undesirable results if the string
+  // contains a % character that is not a format specification!
+  // But CFString is OK!
+
+    va_list                 args;
+    char                    s[1024];
+    CFOptionFlags           responseFlags;
+    ProcessSerialNumber     ourProcess;
+   
+#if 1
+    va_start(args, format);
+    vsprintf(s, format, args);
+    va_end(args);
+#else
+    strcpy(s, format);
+#endif
+
+    // If defaultButton is nil or an empty string, a default localized
+    // button title ("OK" in English) is used.
+    
+    CFStringRef myString = CFStringCreateWithCString(NULL, s, kCFStringEncodingUTF8);
+
+    ::GetCurrentProcess (&ourProcess);
+    ::SetFrontProcess(&ourProcess);
+    CFUserNotificationDisplayAlert(0.0, kCFUserNotificationPlainAlertLevel,
+                NULL, NULL, NULL, CFSTR(" "), myString,
+                NULL, NULL, NULL,
+                &responseFlags);
+    
+    if (myString) CFRelease(myString);
+}
+
+
+static int compareOSVersionTo(int toMajor, int toMinor) {
+    SInt32 major, minor;
+    OSStatus err = noErr;
+    
+    err = Gestalt(gestaltSystemVersionMajor, &major);
+    if (err != noErr) {
+        fprintf(stderr, "Gestalt(gestaltSystemVersionMajor) returned error %ld\n", err);
+        fflush(stderr);
+        return -1;  // gestaltSystemVersionMajor selector was not available before OS 10.4
+    }
+    if (major < toMajor) return -1;
+    if (major > toMajor) return 1;
+    err = Gestalt(gestaltSystemVersionMinor, &minor);
+    if (err != noErr) {
+        fprintf(stderr, "Gestalt(gestaltSystemVersionMinor) returned error %ld\n", err);
+        fflush(stderr);
+        return -1;  // gestaltSystemVersionMinor selector was not available before OS 10.4
+    }
+    if (minor < toMinor) return -1;
+    if (minor > toMinor) return 1;
+    return 0;
 }
 
 
@@ -354,8 +496,8 @@ void print_to_log_file(const char *format, ...) {
     va_list args;
     char buf[256];
     time_t t;
-    strcpy(buf, getenv("HOME"));
-    strcat(buf, "/Documents/test_log.txt");
+    safe_strcpy(buf, getenv("HOME"));
+    safe_strcat(buf, "/Documents/test_log.txt");
     f = fopen(buf, "a");
     if (!f) return;
 
@@ -363,7 +505,7 @@ void print_to_log_file(const char *format, ...) {
 //  freopen(buf, "a", stderr);
 
     time(&t);
-    strcpy(buf, asctime(localtime(&t)));
+    safe_strcpy(buf, asctime(localtime(&t)));
     strip_cr(buf);
 
     fputs(buf, f);

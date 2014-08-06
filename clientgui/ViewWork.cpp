@@ -89,10 +89,16 @@ BEGIN_EVENT_TABLE (CViewWork, CBOINCBaseView)
     EVT_BUTTON(ID_TASK_SHOW_PROPERTIES, CViewWork::OnShowItemProperties)
     EVT_BUTTON(ID_TASK_ACTIVE_ONLY, CViewWork::OnActiveTasksOnly)
     EVT_CUSTOM_RANGE(wxEVT_COMMAND_BUTTON_CLICKED, ID_TASK_PROJECT_WEB_PROJDEF_MIN, ID_TASK_PROJECT_WEB_PROJDEF_MAX, CViewWork::OnProjectWebsiteClicked)
-    EVT_LIST_ITEM_SELECTED(ID_LIST_WORKVIEW, CViewWork::OnListSelected)
-    EVT_LIST_ITEM_DESELECTED(ID_LIST_WORKVIEW, CViewWork::OnListDeselected)
-    EVT_LIST_COL_CLICK(ID_LIST_WORKVIEW, CViewWork::OnColClick)
+// We currently handle EVT_LIST_CACHE_HINT on Windows or 
+// EVT_CHECK_SELECTION_CHANGED on Mac & Linux instead of EVT_LIST_ITEM_SELECTED
+// or EVT_LIST_ITEM_DESELECTED.  See CBOINCBaseView::OnCacheHint() for info.
+#if USE_LIST_CACHE_HINT
     EVT_LIST_CACHE_HINT(ID_LIST_WORKVIEW, CViewWork::OnCacheHint)
+#else
+	EVT_CHECK_SELECTION_CHANGED(CViewWork::OnCheckSelectionChanged)
+#endif
+    EVT_LIST_COL_CLICK(ID_LIST_WORKVIEW, CViewWork::OnColClick)
+    EVT_LIST_COL_END_DRAG(ID_LIST_WORKVIEW, CViewWork::OnColResize)
 END_EVENT_TABLE ()
 
 
@@ -168,7 +174,7 @@ CViewWork::CViewWork()
 
 
 CViewWork::CViewWork(wxNotebook* pNotebook) :
-    CBOINCBaseView(pNotebook, ID_TASK_WORKVIEW, DEFAULT_TASK_FLAGS, ID_LIST_WORKVIEW, DEFAULT_LIST_MULTI_SEL_FLAGS)
+    CBOINCBaseView(pNotebook, ID_TASK_WORKVIEW, DEFAULT_TASK_FLAGS, ID_LIST_WORKVIEW, DEFAULT_LIST_FLAGS)
 {
     CTaskItemGroup* pGroup = NULL;
     CTaskItem*      pItem = NULL;
@@ -611,6 +617,16 @@ void CViewWork::OnProjectWebsiteClicked( wxEvent& event ) {
 }
 
 
+void CViewWork::OnColResize( wxListEvent& ) {
+    // Register the new column widths immediately
+    CAdvancedFrame* pFrame = wxDynamicCast(GetParent()->GetParent()->GetParent(), CAdvancedFrame);
+
+    wxASSERT(pFrame);
+    wxASSERT(wxDynamicCast(pFrame, CAdvancedFrame));
+    pFrame->SaveState();
+}
+
+
 wxInt32 CViewWork::GetDocCount() {
     return wxGetApp().GetDocument()->GetWorkCount();
 }
@@ -846,10 +862,14 @@ void CViewWork::UpdateSelection() {
     pGroup->m_Tasks[BTN_GRAPHICS]->m_pButton->Enable(enableShowGraphics);
     if (enableShowVMConsole) {
         pGroup->m_Tasks[BTN_VMCONSOLE]->m_pButton->Enable();
-        pGroup->m_Tasks[BTN_VMCONSOLE]->m_pButton->Show();
+        if (pGroup->m_Tasks[BTN_VMCONSOLE]->m_pButton->Show()) {
+            m_pTaskPane->FitInside();
+        }
     } else {
         pGroup->m_Tasks[BTN_VMCONSOLE]->m_pButton->Disable();
-        pGroup->m_Tasks[BTN_VMCONSOLE]->m_pButton->Hide();
+        if (pGroup->m_Tasks[BTN_VMCONSOLE]->m_pButton->Hide()) {
+            m_pTaskPane->FitInside();
+        };
     }
     pGroup->m_Tasks[BTN_SUSPEND]->m_pButton->Enable(enableSuspendResume);
     pGroup->m_Tasks[BTN_ABORT]->m_pButton->Enable(enableAbort);
@@ -1152,10 +1172,18 @@ void CViewWork::GetDocReportDeadline(wxInt32 item, time_t& time) const {
 
 
 wxInt32 CViewWork::FormatReportDeadline(time_t deadline, wxString& strBuffer) const {
+#ifdef __WXMAC__
+    // Work around a wxCocoa bug(?) in wxDateTime::Format()
+    char buf[80];
+    struct tm * timeinfo = localtime(&deadline);
+    strftime(buf, sizeof(buf), "%c", timeinfo);
+    strBuffer = buf;
+#else
     wxDateTime     dtTemp;
 
     dtTemp.Set(deadline);
     strBuffer = dtTemp.Format();
+#endif
 
     return 0;
 }

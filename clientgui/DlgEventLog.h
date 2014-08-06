@@ -118,6 +118,12 @@ public:
     /// wxEVT_COMMAND_BUTTON_CLICKED event handler for ID_SIMPLE_HELP
     void OnButtonHelp( wxCommandEvent& event );
 
+    /// EVT_MENU event handler for ID_SGDIAGNOSTICLOGFLAGS
+    void OnDiagnosticLogFlags( wxCommandEvent& event );
+
+    /// EVT_LIST_COL_END_DRAG event handler for ID_SIMPLE_MESSAGESVIEW
+    void OnColResize( wxListEvent& event );
+    
     /// called from CMainDocument::HandleCompletedRPC() after wxEVT_RPC_FINISHED event
     void OnRefresh();
 ////@end CDlgEventLog event handler declarations
@@ -164,6 +170,9 @@ private:
     bool                    m_bProcessingRefreshEvent;
     bool                    m_bWasConnected;
     bool                    m_bEventLogIsOpen;
+
+    wxAcceleratorEntry      m_Shortcuts[1];
+    wxAcceleratorTable*     m_pAccelTable;
 
     bool                    SaveState();
     bool                    RestoreState();

@@ -32,8 +32,8 @@
 
 #include "boinc_db.h"
 #include "error_numbers.h"
-#include "str_util.h"
 #include "filesys.h"
+#include "str_util.h"
 
 #include "sched_check.h"
 #include "sched_config.h"
@@ -48,11 +48,13 @@
 
 #define VERBOSE_DEBUG
 
+#define EINSTEIN_AT_HOME
+
 // get filename from result name
 //
 
-static int extract_filename(char* in, char* out) {
-    strcpy(out, in);
+static int extract_filename(char* in, char* out, int len) {
+    strlcpy(out, in, len);
     char* p = strstr(out, "__");
     if (!p) return -1;
     *p = 0;
@@ -175,7 +177,7 @@ bool host_has_file(char *filename, bool skip_last_wu) {
     for (i=0; i<uplim; i++) {
         char wu_filename[256];
 
-        if (extract_filename(g_reply->wus[i].name, wu_filename)) {
+        if (extract_filename(g_reply->wus[i].name, wu_filename, sizeof(wu_filename))) {
             // work unit does not appear to contain a file name
             continue;
         }
@@ -219,9 +221,9 @@ int decrement_disk_space_locality( WORKUNIT& wu) {
 
     // get filename from WU name
     //
-    if (extract_filename(wu.name, filename)) {
+    if (extract_filename(wu.name, filename, sizeof(filename))) {
         log_messages.printf(MSG_CRITICAL,
-            "No filename found in [WU#%d %s]\n", wu.id, wu.name
+            "No filename found in [WU#%u %s]\n", wu.id, wu.name
         );
         return -1;
     }
@@ -256,7 +258,7 @@ int decrement_disk_space_locality( WORKUNIT& wu) {
         g_wreq->disk_available -= (wu.rsc_disk_bound-filesize);
         if (config.debug_locality) {
             log_messages.printf(MSG_NORMAL,
-                "[locality] [HOST#%d] reducing disk needed for WU by %d bytes (length of %s)\n",
+                "[locality] [HOST#%d] reducing disk needed for WU by %u bytes (length of %s)\n",
                 g_reply->host.id, filesize, filename
             );
         }
@@ -264,7 +266,7 @@ int decrement_disk_space_locality( WORKUNIT& wu) {
     }
 
     log_messages.printf(MSG_CRITICAL,
-        "File %s size %d bytes > wu.rsc_disk_bound for WU#%d (%s)\n",
+        "File %s size %u bytes > wu.rsc_disk_bound for WU#%u (%s)\n",
         path, filesize, wu.id, wu.name
     );
     return -1;
@@ -287,6 +289,13 @@ static int possibly_send_result(SCHED_DB_RESULT& result) {
 
     retval = wu.lookup_id(result.workunitid);
     if (retval) return ERR_DB_NOT_FOUND;
+
+    // This doesn't take into account g_wreq->allow_non_preferred_apps,
+    // however Einstein@Home, which is the only project that currently uses
+    // this locality scheduler, doesn't support the respective project-specific
+    // preference setting
+    //
+    if (app_not_selected(wu.appid)) return ERR_NO_APP_VERSION;
 
     bavp = get_app_version(wu, true, false);
 
@@ -458,7 +467,7 @@ static void build_working_set_namelist(bool slowhost) {
     return;
 }
 
-static int get_working_set_filename(char *filename, bool slowhost) {
+static int get_working_set_filename(char *filename, int len, bool slowhost) {
 
     const char* errtype = NULL;
 
@@ -494,9 +503,9 @@ static int get_working_set_filename(char *filename, bool slowhost) {
 
         // final check
         if (thisname.length() < 1) {
-                errtype = "zero length filename";
+            errtype = "zero length filename";
         } else {
-            strcpy(filename, thisname.c_str());
+            strlcpy(filename, thisname.c_str(), len);
             if (config.debug_locality) {
                 log_messages.printf(MSG_NORMAL,
                     "[locality] get_working_set_filename(%s): returning %s\n",
@@ -555,8 +564,21 @@ static int send_results_for_file(
     nsent = 0;
 
     if (!work_needed(true)) {
+        if (config.debug_locality) {
+            log_messages.printf(MSG_NORMAL,
+                "[locality] send_results_for_file(): No work needed\n"
+            );
+        }
         return 0;
+    } else {
+        if (config.debug_locality) {
+            log_messages.printf(MSG_NORMAL,
+                "[locality] send_results_for_file(%s)\n",
+                filename
+            );
+        }
     }
+
 
     // find largest ID of results already sent to this user for this
     // file, if any.  Any result that is sent will have userid field
@@ -731,7 +753,7 @@ static int send_results_for_file(
                 sleep_made_no_work=0;
             } else if (!config.one_result_per_user_per_wu) {
                 log_messages.printf(MSG_CRITICAL,
-                    "Database inconsistency?  possibly_send_result(%d) failed for [RESULT#%d], returning %d\n",
+                    "Database inconsistency?  possibly_send_result(%d) failed for [RESULT#%u], returning %d\n",
                     i, result.id, retval_send
                 );
             // If another scheduler instance 'snatched' the result
@@ -741,7 +763,7 @@ static int send_results_for_file(
             } else if (retval_send != ERR_DB_NOT_FOUND) {
                 if (config.debug_locality) {
                     log_messages.printf(MSG_NORMAL,
-                        "[locality] possibly_send_result [RESULT#%d]: %s\n",
+                        "[locality] possibly_send_result [RESULT#%u]: %s\n",
                         result.id, boincerror(retval_send)
                     );
                 }
@@ -784,7 +806,7 @@ static int send_new_file_work_deterministic_seeded(
         );
     }
 
-    strcpy(min_resultname, start_f);
+    safe_strcpy(min_resultname, start_f);
     while (1) {
 
         // are we done with the search yet?
@@ -807,7 +829,7 @@ static int send_new_file_work_deterministic_seeded(
 
         retval = result.lookup(query);
         if (retval) break; // no more unsent results or at the end of the filenames, return -1
-        retval = extract_filename(result.name, filename);
+        retval = extract_filename(result.name, filename, sizeof(filename));
         if (retval) return retval; // not locality scheduled, now what???
 
         if (config.debug_locality) {
@@ -862,8 +884,8 @@ static int send_new_file_work_deterministic() {
     // get random filename as starting point for deterministic search
     // If at this point, we have probably failed to find a suitable file
     // for a slow host, so ignore speed of host.
-    if ((getfile_retval = get_working_set_filename(start_filename, /* is_host_slow() */ false))) {
-        strcpy(start_filename, "");
+    if ((getfile_retval = get_working_set_filename(start_filename, sizeof(start_filename), /* is_host_slow() */ false))) {
+        safe_strcpy(start_filename, "");
     }
 
     // start deterministic search with randomly chosen filename, go to
@@ -892,7 +914,7 @@ static int send_new_file_work_working_set() {
     char filename[256];
     int retval, nsent;
 
-    retval = get_working_set_filename(filename, is_host_slow());
+    retval = get_working_set_filename(filename, sizeof(filename), is_host_slow());
     if (retval) return retval;
 
     if (config.debug_locality) {
@@ -905,7 +927,7 @@ static int send_new_file_work_working_set() {
 }
 
 // prototype
-static int send_old_work(int t_min, int t_max);
+static int send_old_work(int t_min, int t_max, bool locality_work_only=false);
 
 // The host doesn't have any files for which work is available.
 // Pick new file to send.  Returns nonzero if no work is available.
@@ -971,10 +993,12 @@ static int send_new_file_work() {
 // also eventually move 'non locality' work through and out of the
 // system?
 //
+// Yes, Bruce, it will. BM
+//
 // This looks for work created in the range t_min < t < t_max.  Use
 // t_min=INT_MIN if you wish to leave off the left constraint.
 //
-static int send_old_work(int t_min, int t_max) {
+static int send_old_work(int t_min, int t_max, bool locality_work_only) {
     char buf[1024], filename[256];
     int retval, extract_retval, nsent;
     SCHED_DB_RESULT result;
@@ -997,14 +1021,24 @@ static int send_old_work(int t_min, int t_max) {
     //
     if (t_min != INT_MIN) {
         sprintf(buf,
+#ifdef EINSTEIN_AT_HOME
+            "INNER JOIN (SELECT id FROM result USE INDEX (res_create_server_state) WHERE server_state=%d and %d<create_time and create_time<%d %s limit 1) AS single USING (id)",
+            RESULT_SERVER_STATE_UNSENT, t_min, t_max, locality_work_only?"and name>binary '%s__' and name<binary '%s__~'":""
+#else
             "INNER JOIN (SELECT id FROM result WHERE server_state=%d and %d<create_time and create_time<%d limit 1) AS single USING (id)",
             RESULT_SERVER_STATE_UNSENT, t_min, t_max
+#endif
         );
     }
     else {
         sprintf(buf,
+#ifdef EINSTEIN_AT_HOME
+            "INNER JOIN (SELECT id FROM result USE INDEX (res_create_server_state) WHERE server_state=%d and create_time<%d %s limit 1) AS single USING (id)",
+            RESULT_SERVER_STATE_UNSENT, t_max, locality_work_only?"and name>binary '%s__' and name<binary '%s__~'":""
+#else
             "INNER JOIN (SELECT id FROM result WHERE server_state=%d and create_time<%d limit 1) AS single USING (id)",
             RESULT_SERVER_STATE_UNSENT, t_max
+#endif
         );
     }
 
@@ -1016,11 +1050,11 @@ static int send_old_work(int t_min, int t_max) {
             double age=(now-result.create_time)/3600.0;
             if (config.debug_locality) {
                 log_messages.printf(MSG_NORMAL,
-                    "[locality] send_old_work(%s) sent result created %.1f hours ago [RESULT#%d]\n",
+                    "[locality] send_old_work(%s) sent result created %.1f hours ago [RESULT#%u]\n",
                     result.name, age, result.id
                 );
             }
-            extract_retval=extract_filename(result.name, filename);
+            extract_retval=extract_filename(result.name, filename, sizeof(filename));
             if (!extract_retval) {
                 send_results_for_file(filename, nsent, false);
             } else {
@@ -1154,6 +1188,21 @@ void send_work_locality() {
             );
         }
 
+    // send old work if there is any. send this only to hosts which have
+    // high-bandwidth connections, since asking dial-up users to upload
+    // (presumably large) data files is onerous.
+    //
+    if (config.locality_scheduling_send_timeout && g_request->host.n_bwdown>100000) {
+        int until=time(0)-config.locality_scheduling_send_timeout;
+        int retval_sow=send_old_work(INT_MIN, until);
+        if (retval_sow) {
+            log_messages.printf(MSG_NORMAL,
+                "[locality] send_old_work() returned %d\n", retval_sow
+            );
+        }
+        if (!work_needed(true)) return;
+    }
+
     // Look for work in order of increasing file name, or randomly?
     //
     if (config.locality_scheduling_sorted_order) {
@@ -1164,16 +1213,6 @@ void send_work_locality() {
         j = rand()%nfiles;
     }
 
-    // send old work if there is any. send this only to hosts which have
-    // high-bandwidth connections, since asking dial-up users to upload
-    // (presumably large) data files is onerous.
-    //
-    if (config.locality_scheduling_send_timeout && g_request->host.n_bwdown>100000) {
-        int until=time(0)-config.locality_scheduling_send_timeout;
-        int retval_sow=send_old_work(INT_MIN, until);
-        if (retval_sow==ERR_NO_APP_VERSION || retval_sow==ERR_INSUFFICIENT_RESOURCE) return;
-    }
-
     // send work for existing files
     //
     for (i=0; i<(int)g_request->file_infos.size(); i++) {
@@ -1182,7 +1221,7 @@ void send_work_locality() {
 
         if (!work_needed(true)) break;
         FILE_INFO& fi = g_request->file_infos[k];
-        retval_srff=send_results_for_file(
+        retval_srff = send_results_for_file(
             fi.name, nsent, false
         );
 
@@ -1203,10 +1242,41 @@ void send_work_locality() {
                 );
             }
 #ifdef EINSTEIN_AT_HOME
-            // For name matching pattern h1_XXXX.XX_S5R4
-            // generate corresponding l1_XXXX.XX_S5R4 and *_S5R7 patterns and delete it also
+            // For name matching patterns h1_
+            // generate corresponding l1_ patterns and delete these also
             //
-            if (strlen(fi.name)==15 && !strncmp("h1_", fi.name, 3)) {
+            if (   /* files like h1_0340.30_S6GC1 */
+                   (   strlen(fi.name) == 16 &&
+                       !strncmp("h1_", fi.name, 3) &&
+                       !strncmp("_S6GC1", fi.name + 10, 6)
+                   ) ||
+                   /* files like h1_0000.00_S6Directed */
+                   (   strlen(fi.name) == 21 &&
+                       !strncmp("h1_", fi.name, 3) &&
+                       !strncmp("_S6Directed", fi.name + 10, 11)
+                   ) ||
+                   /* files like h1_0000.00_S6Direct */
+                   (   strlen(fi.name) == 19 &&
+                       !strncmp("h1_", fi.name, 3) &&
+                       !strncmp("_S6Direct", fi.name + 10, 9)
+                   )
+               ) {
+                FILE_INFO fil;
+                fil=fi;
+                fil.name[0]='l';
+                g_reply->file_deletes.push_back(fil);
+                if (config.debug_locality) {
+                    log_messages.printf(MSG_NORMAL,
+                        "[locality] [HOST#%d]: delete file %s (accompanies %s)\n",
+                        g_reply->host.id, fil.name, fi.name
+                    );
+                }
+            } else if ( /* for files like h1_XXXX.XX_S5R4 */
+                   (   strlen(fi.name) == 15 &&
+                       !strncmp("h1_", fi.name, 3) &&
+                       !strncmp("_S5R4", fi.name + 10, 5)
+                   )
+               ) {
                 FILE_INFO fil4,fil7,fih7;
                 fil4=fi;
                 fil4.name[0]='l';
@@ -1219,8 +1289,8 @@ void send_work_locality() {
                 g_reply->file_deletes.push_back(fih7);
                 if (config.debug_locality) {
                     log_messages.printf(MSG_NORMAL,
-                        "[locality] [HOST#%d]: delete files %s,%s,%s (not needed)\n",
-                        g_reply->host.id, fil4.name,fil7.name,fih7.name
+                        "[locality] [HOST#%d]: delete files %s,%s,%s (accompanies %s)\n",
+                        g_reply->host.id, fil4.name,fil7.name,fih7.name, fi.name
                     );
                 }
             }

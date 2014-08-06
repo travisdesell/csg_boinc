@@ -55,6 +55,7 @@ create table app (
     non_cpu_intensive       tinyint         not null default 0,
     locality_scheduling     integer         not null default 0,
     n_size_classes          smallint        not null default 0,
+    fraction_done_exact     tinyint         not null default 0,
     primary key (id)
 ) engine=InnoDB;
 
@@ -74,6 +75,7 @@ create table app_version (
     pfc_scale               double          not null default 0,
     expavg_credit           double          not null default 0,
     expavg_time             double          not null default 0,
+    beta                    tinyint         not null default 0,
     primary key (id)
 ) engine=InnoDB;
 
@@ -186,6 +188,7 @@ create table host (
     max_results_day         integer         not null,
     error_rate              double          not null default 0,
     product_name            varchar(254)    not null,
+    gpu_active_frac         double          not null,
 
     primary key (id)
 ) engine=InnoDB;
@@ -243,7 +246,7 @@ create table workunit (
     max_success_results     integer         not null,
     result_template_file    varchar(63)     not null,
     priority                integer         not null,
-    mod_time                timestamp,
+    mod_time                timestamp default current_timestamp on update current_timestamp,
     rsc_bandwidth_bound     double          not null,
     fileset_id              integer         not null,
     app_version_id          integer         not null,
@@ -281,16 +284,18 @@ create table result (
     exit_status             integer         not null,
     teamid                  integer         not null,
     priority                integer         not null,
-    mod_time                timestamp,
+    mod_time                timestamp default current_timestamp on update current_timestamp,
     elapsed_time            double          not null,
     flops_estimate          double          not null,
     app_version_id          integer         not null,
     runtime_outlier         tinyint         not null,
     size_class              smallint        not null default -1,
+    peak_working_set_size   double          not null,
+    peak_swap_size          double          not null,
+    peak_disk_usage         double          not null,
     primary key (id)
 ) engine=InnoDB;
 
--- see boinc_db.h for doc
 create table batch (
     id                      serial          primary key,
     user_id                 integer         not null,
@@ -309,7 +314,8 @@ create table batch (
     name                    varchar(255)    not null,
     app_id                  integer         not null,
     project_state           integer         not null,
-    description             varchar(255)    not null
+    description             varchar(255)    not null,
+    expire_time             double          not null
 ) engine = InnoDB;
 
 -- permissions for job submission
@@ -320,10 +326,11 @@ create table user_submit (
     logical_start_time      double          not null,
     submit_all              tinyint         not null,
         -- can submit jobs to any app
-    manage_all              tinyint         not null
+    manage_all              tinyint         not null,
         -- manager privileges for all apps
         -- grant/revoke permissions (except manage), change quotas
         -- create apps
+    max_jobs_in_progress    integer         not null
 ) engine = InnoDB;
 
 -- (user, app) submit permissions
@@ -689,4 +696,38 @@ create table notify (
     type                    integer         not null,
     opaque                  integer         not null
         -- some other ID, e.g. that of the thread, user or PM record
+);
+
+create table badge (
+    id                      serial          primary key,
+    create_time             double          not null,
+    type                    tinyint         not null,
+        -- 0=user, 1=team
+    name                    varchar(255)    not null,
+        -- internal use (not visible to users)
+    title                   varchar(255)    not null,
+        -- user-visible, short
+    description             varchar(255)    not null,
+        -- user-visible, possibly longer
+    image_url               varchar(255)    not null,
+        -- location of image
+    level                   varchar(255)    not null,
+        -- project-defined
+    tags                    varchar(255)    not null,
+        -- project-defined
+    sql_rule                varchar(255)    not null
+);
+
+create table badge_user (
+    badge_id                integer         not null,
+    user_id                 integer         not null,
+    create_time             double          not null,
+    reassign_time           double          not null
+);
+
+create table badge_team (
+    badge_id                integer         not null,
+    team_id                 integer         not null,
+    create_time             double          not null,
+    reassign_time           double          not null
 );

@@ -38,9 +38,41 @@ if (defined('TIMEZONE')) {
     date_default_timezone_set('UTC');
 }
 
+if (!defined('DISABLE_PROFILES')) {
+    define('DISABLE_PROFILES', false);
+}
+if (!defined('DISABLE_FORUMS')) {
+    define('DISABLE_FORUMS', false);
+}
+if (!defined('DISABLE_TEAMS')) {
+    define('DISABLE_TEAMS', false);
+}
+if (!defined('DISABLE_BADGES')) {
+    define('DISABLE_BADGES', false);
+}
+
 $caching = false;
     // if set, we're writing to a file rather than to client
 $did_page_head = false;
+
+define('KILO', 1024);
+define('MEGA', 1024*KILO);
+define('GIGA', 1024*MEGA);
+
+// return true if this page is HTTPS
+//
+function is_https() {
+    return isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'];
+}
+
+function secure_url_base() {
+    if (defined('SECURE_URL_BASE')) return SECURE_URL_BASE;
+    return URL_BASE;
+}
+
+function url_base() {
+    return is_https()?secure_url_base():URL_BASE;
+}
 
 function send_cookie($name, $value, $permanent, $ops=false) {
     // the following allows independent login for projects on the same server
@@ -65,11 +97,6 @@ function clear_cookie($name, $ops=false) {
         $path .= "_ops/";
     }
     setcookie($name, '', time()-3600, $path);
-}
-
-function get_user_from_id($id) {
-    if ($id) return lookup_user_id($id);
-    return NULL;
 }
 
 $g_logged_in_user = null;
@@ -137,11 +164,12 @@ function page_head(
     global $caching, $cache_control_extra, $did_page_head;
 
     $did_page_head = true;
-    $stylesheet = URL_BASE.STYLESHEET;
+    $url_base = url_base();
+    $stylesheet = $url_base.STYLESHEET;
     $rssname = PROJECT . " RSS 2.0";
-    $rsslink = URL_BASE."rss_main.php";
+    $rsslink = $url_base."rss_main.php";
     if (defined('STYLESHEET2')) {
-        $stylesheet2 = URL_BASE.STYLESHEET2;
+        $stylesheet2 = $url_base.STYLESHEET2;
     } else {
         $stylesheet2 = null;
     }
@@ -166,7 +194,7 @@ function page_head(
     } else {
         echo "<title>".sanitize_tags($title_plain)."</title>\n";
     }
-    echo "<link rel=stylesheet type=\"text/css\" href=\"".URL_BASE."main.css\" media=\"all\">
+    echo "<link rel=stylesheet type=\"text/css\" href=\"".$url_base."main.css\" media=\"all\">
         <link rel=stylesheet type=\"text/css\" href=\"$stylesheet\">
     ";
     if ($stylesheet2) {
@@ -311,7 +339,7 @@ function table_header() {
             $col = func_get_arg($i);
             echo "<th ".$col[1].">".$col[0]."</th>\n";
         } else {
-            echo "<th>".func_get_arg($i)."</th>\n";
+            echo "<th valign=top>".func_get_arg($i)."</th>\n";
         }
     }
     echo "</tr>\n";
@@ -371,8 +399,12 @@ function rowify($string) {
     echo "<tr><td>$string</td></tr>";
 }
 
-function row_array($x) {
-    echo "<tr>";
+function row_array($x, $class=null) {
+    if ($class) {
+        echo "<tr class='$class'>";
+    } else {
+        echo "<tr>";
+    }
     foreach ($x as $h) {
         echo "<td>$h</td>";
     }
@@ -572,6 +604,8 @@ function check_get_args($args) {
     }
 }
 
+// returns null if the arg is optional and missing
+//
 function get_int($name, $optional=false) {
     $x=null;
     if (isset($_GET[$name])) $x = $_GET[$name];
@@ -590,6 +624,8 @@ function get_int($name, $optional=false) {
     return (int)$x;
 }
 
+// returns null if the arg is optional and missing
+//
 function post_num($name, $optional=false) {
     $x = null;
     if (isset($_POST[$name])) $x = $_POST[$name];
@@ -603,8 +639,11 @@ function post_num($name, $optional=false) {
     return (double)$x;
 }
 
+// returns null if the arg is optional and missing
+//
 function post_int($name, $optional=false) {
     $x = post_num($name, $optional);
+    if (is_null($x)) return null;
     $y = (int)$x;
     if ($x != $y) {
         error_page("param $name must be an integer");
@@ -792,12 +831,10 @@ function db_init($try_replica=false) {
     $retval = db_init_aux($try_replica);
     if ($retval == 1) {
         echo tra("Unable to connect to database - please try again later");
-        echo tra("Error:"), " ", mysql_errno(), mysql_error();
         exit();
     }
     if ($retval == 2) {
         echo tra("Unable to select database - please try again later");
-        echo mysql_error();
         exit();
     }
     return 0;
@@ -894,11 +931,6 @@ function do_download($path,$name="") {
     readfile($path);
 }
 
-function secure_url_base() {
-    if (defined('SECURE_URL_BASE')) return SECURE_URL_BASE;
-    return URL_BASE;
-}
-
 function redirect_to_secure_url($url) {
     if (defined('SECURE_URL_BASE')
         && strstr(SECURE_URL_BASE, "https://")
@@ -908,6 +940,39 @@ function redirect_to_secure_url($url) {
         exit;
 
     }
+}
+
+function show_badges($is_user, $item) {
+    if (DISABLE_BADGES) return;
+    if ($is_user) {
+        $bus = BoincBadgeUser::enum("user_id=$item->id");
+    } else {
+        $bus = BoincBadgeTeam::enum("team_id=$item->id");
+    }
+    if (!$bus) return;
+    $x = "";
+    foreach ($bus as $bu) {
+        $badge = BoincBadge::lookup_id($bu->badge_id);
+        $x .= "<img title=\"$badge->title\" height=48 src=$badge->image_url> ";
+    }
+    row2("Badges", $x);
+}
+
+function dtime() {
+    return microtime(true);
+}
+
+// If this request is from a BOINC client, return its version as MMmmRR.
+// Otherwise return 0.
+// Format of user agent string is "BOINC client (windows_x86_64 7.3.17)"
+//
+function boinc_client_version(){
+    $x = $_SERVER[HTTP_USER_AGENT];
+    $e =  "/BOINC client [^ ]* (\d+).(\d+).(\d+)\)/";
+    if (preg_match($e, $x, $matches)) {
+        return $matches[1]*10000 + $matches[2]*100 + $matches[3];
+    }
+    return 0;
 }
 
 $cvs_version_tracker[]="\$Id$";  //Generated automatically - do not edit

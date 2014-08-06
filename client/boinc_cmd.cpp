@@ -54,8 +54,11 @@ void version(){
 
 void usage() {
     fprintf(stderr, "\n\
-usage: boinccmd [--host hostname] [--passwd passwd] command\n\n\
+usage: boinccmd [--host hostname] [--passwd passwd] [--unix_domain] command\n\n\
+default hostname: localhost\n\
+default password: contents of gui_rpc_auth.cfg\n\
 Commands:\n\
+ --client_version                   show client version\n\
  --create_account URL email passwd name\n\
  --file_transfer URL filename op    file transfer operation\n\
    op = retry | abort\n\
@@ -73,6 +76,7 @@ Commands:\n\
  --get_simple_gui_info              show status of projects and active tasks\n\
  --get_state                        show entire state\n\
  --get_tasks                        show tasks\n\
+ --get_old_tasks                    show reported tasks from last 24 hours\n\
  --join_acct_mgr URL name passwd    attach account manager\n\
  --lookup_account URL email passwd\n\
  --network_available                retry deferred network communication\n\
@@ -94,7 +98,6 @@ Commands:\n\
    mode = always | auto | never\n\
  --task url task_name op            task operation\n\
    op = suspend | resume | abort\n\
- --version, -V                      show client version\n\
 "
 );
     exit(1);
@@ -125,6 +128,7 @@ int main(int argc, char** argv) {
     NOTICES notices;
     char passwd_buf[256], hostname_buf[256], *hostname=0;
     char* passwd = passwd_buf, *p;
+    bool unix_domain = false;
 
 #ifdef _WIN32
     chdir_to_data_dir();
@@ -163,14 +167,28 @@ int main(int argc, char** argv) {
         passwd = argv[i];
         i++;
     }
+    if (i == argc) usage();
+    if (!strcmp(argv[i], "--unix_domain")) {
+        unix_domain = true;
+        i++;
+    }
+    if (i == argc) usage();
 
     // change the following to debug GUI RPC's asynchronous connection mechanism
     //
 #if 1
-    retval = rpc.init(hostname, port);
-    if (retval) {
-        fprintf(stderr, "can't connect to %s\n", hostname?hostname:"local host");
-        exit(1);
+    if (unix_domain) {
+        retval = rpc.init_unix_domain();
+        if (retval) {
+            fprintf(stderr, "can't connect to Unix domain socket\n");
+            exit(1);
+        }
+    } else {
+        retval = rpc.init(hostname, port);
+        if (retval) {
+            fprintf(stderr, "can't connect to %s\n", hostname?hostname:"local host");
+            exit(1);
+        }
     }
 #else
     retval = rpc.init_asynch(hostname, 60., false);
@@ -197,7 +215,13 @@ int main(int argc, char** argv) {
     }
 
     char* cmd = next_arg(argc, argv, i);
-    if (!strcmp(cmd, "--get_state")) {
+    if (!strcmp(cmd, "--client_version")) {
+        VERSION_INFO vi;
+        retval = rpc.exchange_versions(vi);
+        if (!retval) {
+            printf("Client version: %d.%d.%d\n", vi.major, vi.minor, vi.release);
+        }
+    } else if (!strcmp(cmd, "--get_state")) {
         CC_STATE state;
         retval = rpc.get_state(state);
         if (!retval) state.print();
@@ -205,6 +229,15 @@ int main(int argc, char** argv) {
         RESULTS results;
         retval = rpc.get_results(results);
         if (!retval) results.print();
+    } else if (!strcmp(cmd, "--get_old_tasks")) {
+        vector<OLD_RESULT> ors;
+        retval = rpc.get_old_results(ors);
+        if (!retval) {
+            for (unsigned int j=0; j<ors.size(); j++) {
+                OLD_RESULT& o = ors[j];
+                o.print();
+            }
+        }
     } else if (!strcmp(cmd, "--get_file_transfers")) {
         FILE_TRANSFERS ft;
         retval = rpc.get_file_transfers(ft);
@@ -217,6 +250,10 @@ int main(int argc, char** argv) {
         PROJECTS ps;
         retval = rpc.get_project_status(ps);
         if (!retval) ps.print();
+    } else if (!strcmp(cmd, "--get_project_urls")) {
+        PROJECTS ps;
+        retval = rpc.get_project_status(ps);
+        if (!retval) ps.print_urls();
     } else if (!strcmp(cmd, "--get_simple_gui_info")) {
         SIMPLE_GUI_INFO info;
         retval = rpc.get_simple_gui_info(info);
@@ -228,9 +265,9 @@ int main(int argc, char** argv) {
     } else if (!strcmp(cmd, "--task")) {
         RESULT result;
         char* project_url = next_arg(argc, argv, i);
-        strcpy(result.project_url, project_url);
+        safe_strcpy(result.project_url, project_url);
         char* name = next_arg(argc, argv, i);
-        strcpy(result.name, name);
+        safe_strcpy(result.name, name);
         char* op = next_arg(argc, argv, i);
         if (!strcmp(op, "suspend")) {
             retval = rpc.result_op(result, "suspend");
@@ -243,7 +280,7 @@ int main(int argc, char** argv) {
         }
     } else if (!strcmp(cmd, "--project")) {
         PROJECT project;
-        strcpy(project.master_url, next_arg(argc, argv, i));
+        safe_strcpy(project.master_url, next_arg(argc, argv, i));
         canonicalize_master_url(project.master_url, sizeof(project.master_url));
         char* op = next_arg(argc, argv, i);
         if (!strcmp(op, "reset")) {
@@ -256,10 +293,6 @@ int main(int argc, char** argv) {
             retval = rpc.project_op(project, "detach");
         } else if (!strcmp(op, "update")) {
             retval = rpc.project_op(project, "update");
-        } else if (!strcmp(op, "suspend")) {
-            retval = rpc.project_op(project, "suspend");
-        } else if (!strcmp(op, "resume")) {
-            retval = rpc.project_op(project, "resume");
         } else if (!strcmp(op, "nomorework")) {
             retval = rpc.project_op(project, "nomorework");
         } else if (!strcmp(op, "allowmorework")) {
@@ -273,7 +306,7 @@ int main(int argc, char** argv) {
         }
     } else if (!strcmp(cmd, "--project_attach")) {
         char url[256];
-        strcpy(url, next_arg(argc, argv, i));
+        safe_strcpy(url, next_arg(argc, argv, i));
         canonicalize_master_url(url, sizeof(url));
         char* auth = next_arg(argc, argv, i);
         retval = rpc.project_attach(url, auth, "");
@@ -328,7 +361,7 @@ int main(int argc, char** argv) {
         HOST_INFO h;
         memset(&h, 0, sizeof(h));
         char* pn = next_arg(argc, argv, i);
-        strcpy(h.product_name, pn);
+        safe_strcpy(h.product_name, pn);
         retval = rpc.set_host_info(h);
     } else if (!strcmp(cmd, "--set_network_mode")) {
         char* op = next_arg(argc, argv, i);

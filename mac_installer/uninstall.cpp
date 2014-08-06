@@ -29,6 +29,7 @@
 #include <pwd.h>	// passwd, getpwnam
 #include <dirent.h>
 #include <sys/param.h>  // for MAXPATHLEN
+#include <sys/stat.h>   // For stat()
 #include <string.h>
 #include <vector>
 #include <string>
@@ -37,8 +38,9 @@ using std::vector;
 using std::string;
 
 #define SEARCHFORALLBOINCMANAGERS 0
+#define MAX_LANGUAGES_TO_TRY 5
 
-#include "LoginItemAPI.h"
+#include "translate.h"
 
 static OSStatus DoUninstall(void);
 static OSStatus CleanupAllVisibleUsers(void);
@@ -46,7 +48,6 @@ static OSStatus DeleteOurBundlesFromDirectory(CFStringRef bundleID, char *extens
 static OSStatus GetAuthorization(AuthorizationRef * authRef, const char *pathToTool, char *brandName);
 static OSStatus DoPrivilegedExec(char *brandName, const char *pathToTool, char *arg1, char *arg2, char *arg3, char *arg4, char *arg5);
 static void DeleteLoginItemOSAScript(char* user, char* appName);
-static void DeleteLoginItemAPI(void);
 static void DeleteLoginItemFromPListFile(void);
 static char * PersistentFGets(char *buf, size_t buflen, FILE *f);
 OSErr GetCurrentScreenSaverSelection(char *moduleName, size_t maxLen);
@@ -57,35 +58,39 @@ OSErr DeleteLoginItemNameAtIndexFromPlistFile(int index);
 static OSErr FindProcess (OSType typeToFind, OSType creatorToFind, ProcessSerialNumberPtr processSN);
 static pid_t FindProcessPID(char* name, pid_t thePID);
 static OSStatus QuitOneProcess(OSType signature);
+static void KillVBoxProcess(char* name);
 static void SleepTicks(UInt32 ticksToSleep);
-static Boolean ShowMessage(Boolean allowCancel, Boolean continueButton, const char *format, ...);
+static void GetPreferredLanguages();
+static void LoadPreferredLanguages();
+static Boolean ShowMessage(Boolean allowCancel, Boolean continueButton, Boolean yesNoButtons, const char *format, ...);
 #if SEARCHFORALLBOINCMANAGERS
 static OSStatus GetpathToBOINCManagerApp(char* path, int maxLen, FSRef *theFSRef);
 #endif
+static int compareOSVersionTo(int toMajor, int toMinor);
+
+static char gAppName[256];
+static char gBrandName[256];
+static char gCatalogsDir[MAXPATHLEN];
+static char * gCatalog_Name = (char *)"BOINC-Setup";
+static char * gTempFileName = "/tmp/BOINC_preferred_languages";
+
+
+/* BEGIN TEMPORARY ITEMS TO ALLOW TRANSLATORS TO START WORK */
+void notused() {
+    ShowMessage(true, false, false, (char *)_("OK"));
+}
+/* END TEMPORARY ITEMS TO ALLOW TRANSLATORS TO START WORK */
 
 
 int main(int argc, char *argv[])
 {
-    char                        pathToSelf[MAXPATHLEN], appName[256], *p;
+    char                        pathToSelf[MAXPATHLEN], pathToVBoxUninstallTool[MAXPATHLEN], *p;
     ProcessSerialNumber         ourPSN;
     FSRef                       ourFSRef;
     Boolean                     cancelled = false;
+    struct stat                 sbuf;
     OSStatus                    err = noErr;
 
-    // Determine whether this is the intial launch or the relaunch with privileges
-    if ( (argc == 2) && (strcmp(argv[1], "--privileged") == 0) ) {
-        if (geteuid() != 0) {        // Confirm that we are running as root
-            ShowMessage(false, false, "Permission error after relaunch");
-            return permErr;
-        }
-        
-        ShowMessage(false, true, "Removal may take several minutes.\nPlease be patient.");
-        
-        return DoUninstall();
-    }
-
-    // This is the initial launch.  Authenticate and relaunch ourselves with privileges.
-    
     // Get the full path to our executable inside this application's bundle
     err = GetCurrentProcess (&ourPSN);
     if (err == noErr) {
@@ -95,60 +100,226 @@ int main(int argc, char *argv[])
         err = FSRefMakePath (&ourFSRef, (UInt8*)pathToSelf, sizeof(pathToSelf));
     }
     if (err != noErr) {
-        ShowMessage(false, false, "Couldn't get path to self.  Error %d", err);
+        ShowMessage(false, false, false, "Couldn't get path to self.  Error %d", err);
         return err;
     }
+
+    strlcpy(pathToVBoxUninstallTool, pathToSelf, sizeof(pathToVBoxUninstallTool));
+    strlcat(pathToVBoxUninstallTool, "/Contents/Resources/VirtualBox_Uninstall.tool", sizeof(pathToVBoxUninstallTool));
 
     // To allow for branding, assume name of executable inside bundle is same as name of bundle
     p = strrchr(pathToSelf, '/');         // Assume name of executable inside bundle is same as name of bundle
     if (p == NULL)
         p = pathToSelf - 1;
-    strlcpy(appName, p+1, sizeof(appName));
-    p = strrchr(appName, '.');         // Strip off bundle extension (".app")
+    strlcpy(gAppName, p+1, sizeof(gAppName));
+    p = strrchr(gAppName, '.');         // Strip off bundle extension (".app")
     if (p)
         *p = '\0'; 
 
+    strlcpy(gCatalogsDir, pathToSelf, sizeof(gCatalogsDir));
+    strlcat(gCatalogsDir, "/Contents/Resources/locale/", sizeof(gCatalogsDir));
+    
     strlcat(pathToSelf, "/Contents/MacOS/", sizeof(pathToSelf));
-    strlcat(pathToSelf, appName, sizeof(pathToSelf));
+    strlcat(pathToSelf, gAppName, sizeof(pathToSelf));
 
-    p = strchr(appName, ' ');
+    p = strchr(gAppName, ' ');
     p += 1;         // Point to brand name following "Uninstall "
-
-    if (GetResource('ALRT', 128)) {
-        // BOINC uses custom dialog with custom PICT
-        cancelled = (Alert(128, NULL)  == cancel);
-    } else {
-        // Grid Republic uses generic dialog with Uninstall application's icon
-        cancelled = ! ShowMessage(true, false, "Are you sure you want to completely remove %s from your computer?\n\n"
-                                        "This will remove the executables but will not touch %s data files.", p, p);
+    strlcpy(gBrandName, p, sizeof(gBrandName));
+        
+    // Determine whether this is the intial launch or the relaunch with privileges
+    if ( (argc == 2) && (strcmp(argv[1], "--privileged") == 0) ) {
+        LoadPreferredLanguages();
+        
+        if (geteuid() != 0) {        // Confirm that we are running as root
+            ShowMessage(false, false, false, (char *)_("Permission error after relaunch"));
+            BOINCTranslationCleanup();
+            return permErr;
+        }
+        
+        ShowMessage(false, true, false, (char *)_("Removal may take several minutes.\nPlease be patient."));
+        
+        err = DoUninstall();
+        
+        BOINCTranslationCleanup();
+        return err;
     }
 
+    // This is the initial launch.  Authenticate and relaunch ourselves with privileges.
+
+    GetPreferredLanguages();    // We must do this before switching to root user
+    LoadPreferredLanguages();
+    
+    // Grid Republic uses generic dialog with Uninstall application's icon
+    cancelled = ! ShowMessage(true, true, false, (char *)_(
+            "Are you sure you want to completely remove %s from your computer?\n\n"
+            "This will remove the executables but will not touch %s data files."), p, p);
     if (! cancelled) {
         err = DoPrivilegedExec(p, pathToSelf, "--privileged", NULL, NULL, NULL, NULL);
     }
     
     if (cancelled || (err == errAuthorizationCanceled)) {
-        ShowMessage(false, false, "Canceled: %s has not been touched.", p);
+        ShowMessage(false, false, false, (char *)_("Canceled: %s has not been touched."), p);
+        BOINCTranslationCleanup();
         return err;
     }
 
+
 #if TESTING
-    ShowMessage(false, false, "DoPrivilegedExec returned %d", err);
+    ShowMessage(false, false, false, "DoPrivilegedExec returned %d", err);
 #endif
 
-    if (err)
-        ShowMessage(false, false, "An error occurred: error code %d", err);
-    else
-        ShowMessage(false, false, "Removal completed.\n\n You may want to remove the following remaining items using the Finder: \n"
-         "\"/Library/Application Support/BOINC Data\" directory\n\nfor each user, the file\n"
-         "\"/Users/[username]/Library/Preferences/BOINC Manager Preferences\".");
+    if (err) {
+        ShowMessage(false, false, false, (char *)_("An error occurred: error code %d"), err);
+    }else {
+        FSRef BOINCDataRef, UserPrefsRef;
+        CFStringRef CFBOINCDataPath, CFUserPrefsPath;
+        char BOINCDataPath[MAXPATHLEN], temp[MAXPATHLEN], PathToPrefs[MAXPATHLEN];
+        Boolean success = false;
+        char * loginName = getlogin();
         
+        err = FSPathMakeRef((StringPtr)"/Library", &BOINCDataRef, NULL);
+        if (err == noErr) {
+            err = LSCopyDisplayNameForRef(&BOINCDataRef, &CFBOINCDataPath);
+        }
+        if (err == noErr) {
+            success = CFStringGetCString(CFBOINCDataPath, temp,
+                        sizeof(temp), kCFStringEncodingUTF8);
+        }
+        if (success) {
+            success = false;
+            strlcpy(BOINCDataPath, "/", sizeof(BOINCDataPath));
+            strlcat(BOINCDataPath, temp, sizeof(BOINCDataPath));
+            strlcat(BOINCDataPath, "/", sizeof(BOINCDataPath));
+            
+            err = FSPathMakeRef((StringPtr)"/Library/Application Support", &BOINCDataRef, NULL);
+            if (err == noErr) {
+                err = LSCopyDisplayNameForRef(&BOINCDataRef, &CFBOINCDataPath);
+            }
+            if (err == noErr) {
+                success = CFStringGetCString(CFBOINCDataPath, temp,
+                            sizeof(temp), kCFStringEncodingUTF8);
+            }
+        }
+        if (success) {
+            strlcat(BOINCDataPath, temp, sizeof(BOINCDataPath));
+            strlcat(BOINCDataPath, "/BOINC Data", sizeof(BOINCDataPath));
+        } else {
+            strlcpy(BOINCDataPath,
+                    "/Library/Application Support/BOINC Data",
+                    sizeof(BOINCDataPath));
+        }
+        
+        success = false;
+                
+//        err = FSPathMakeRef((StringPtr)"/Users", &UserPrefsRef, NULL);
+        err = FSPathMakeRef((StringPtr)"/Users", &UserPrefsRef, NULL);
+        if (err == noErr) {
+            err = LSCopyDisplayNameForRef(&UserPrefsRef, &CFUserPrefsPath);
+        }
+        if (err == noErr) {
+            success = CFStringGetCString(CFUserPrefsPath, temp,
+                        sizeof(temp), kCFStringEncodingUTF8);
+        }
+        if (success) {
+            success = false;
+            strlcpy(PathToPrefs, "/", sizeof(PathToPrefs));
+            strlcat(PathToPrefs, temp, sizeof(PathToPrefs));
+            strlcat(PathToPrefs, "/[", sizeof(PathToPrefs));
+            strlcat(PathToPrefs, (char *)_("name  of user"), sizeof(PathToPrefs));
+            strlcat(PathToPrefs, "]/", sizeof(PathToPrefs));
+            
+            sprintf(temp, "/Users/%s/Library", loginName);
+            err = FSPathMakeRef((StringPtr)temp, &UserPrefsRef, NULL);
+            if (err == noErr) {
+                err = LSCopyDisplayNameForRef(&UserPrefsRef, &CFUserPrefsPath);
+            }
+            if (err == noErr) {
+                success = CFStringGetCString(CFUserPrefsPath, temp,
+                            sizeof(temp), kCFStringEncodingUTF8);
+            }
+        }
+        if (success) {
+            success = false;
+            strlcat(PathToPrefs, temp, sizeof(PathToPrefs));
+            strlcat(PathToPrefs, "/", sizeof(PathToPrefs));
+            
+            sprintf(temp, "/Users/%s/Library/Preferences", loginName);
+            err = FSPathMakeRef((StringPtr)temp, &UserPrefsRef, NULL);
+            if (err == noErr) {
+                err = LSCopyDisplayNameForRef(&UserPrefsRef, &CFUserPrefsPath);
+            }
+            if (err == noErr) {
+                success = CFStringGetCString(CFUserPrefsPath, temp,
+                            sizeof(temp), kCFStringEncodingUTF8);
+            }
+        }
+        if (success) {
+            strlcat(PathToPrefs, temp, sizeof(PathToPrefs));
+            strlcat(PathToPrefs, "/BOINC Manager Preferences", sizeof(PathToPrefs));
+        } else {
+            strlcpy(PathToPrefs,
+                    "/Users/[username]/Library/Preferences/BOINC Manager Preferences",
+                    sizeof(PathToPrefs));
+        }
+
+        // stat() returns zero on success
+        if (stat(pathToVBoxUninstallTool, &sbuf) == 0) {
+            char cmd[MAXPATHLEN+30];
+
+            cancelled = ! ShowMessage(true, false, true, (char *)_(
+                "Do you also want to remove VirtualBox from your computer?\n"
+                "(VirtualBox was installed along with BOINC.)"));
+            if (! cancelled) {
+                err = QuitOneProcess('VBOX');
+                if (err != procNotFound) {
+                    sleep(5);
+                }
+                // List of processes to kill taken from my_processes
+                // array in VirtualBox_Uninstall.tool script:
+                KillVBoxProcess("VirtualBox");
+                KillVBoxProcess("VirtualBox-amd64");
+                KillVBoxProcess("VirtualBox-x86");
+                KillVBoxProcess("VirtualBoxVM");
+                KillVBoxProcess("VirtualBoxVM-amd64");
+                KillVBoxProcess("VirtualBoxVM-x86");
+                KillVBoxProcess("VBoxManage");
+                KillVBoxProcess("VBoxManage-amd64");
+                KillVBoxProcess("VBoxManage-x86");
+                KillVBoxProcess("VBoxHeadless");
+                KillVBoxProcess("VBoxHeadless-amd64");
+                KillVBoxProcess("VBoxHeadless-x86");
+                KillVBoxProcess("vboxwebsrv");
+                KillVBoxProcess("vboxwebsrv-amd64");
+                KillVBoxProcess("vboxwebsrv-x86");
+                KillVBoxProcess("VBoxXPCOMIPCD");
+                KillVBoxProcess("VBoxXPCOMIPCD-amd64");
+                KillVBoxProcess("VBoxXPCOMIPCD-x86");
+                KillVBoxProcess("VBoxSVC");
+                KillVBoxProcess("VBoxSVC-amd64");
+                KillVBoxProcess("VBoxSVC-x86");
+                KillVBoxProcess("VBoxNetDHCP");
+                KillVBoxProcess("VBoxNetDHCP-amd64");
+                KillVBoxProcess("VBoxNetDHCP-x86");
+                sleep(2);
+                
+                snprintf(cmd, sizeof(cmd), "source \"%s\" --unattended", pathToVBoxUninstallTool);
+                system(cmd);
+            }
+        }
+        
+        ShowMessage(false, false, false, (char *)_("Removal completed.\n\n You may want to remove the following remaining items using the Finder: \n"
+         "the directory \"%s\"\n\nfor each user, the file\n"
+         "\"%s\"."), BOINCDataPath, PathToPrefs);
+    }
+    
+    BOINCTranslationCleanup();
     return err;
 }
 
 
 static OSStatus DoUninstall(void) {
     pid_t                   coreClientPID = 0;
+    pid_t                   BOINCManagerPID = 0;
     char                    cmd[1024];
     char                    *p;
     passwd                  *pw;
@@ -161,11 +332,39 @@ static OSStatus DoUninstall(void) {
 #endif
 
 #if TESTING
-    ShowMessage(false, false, "Permission OK after relaunch");
+    ShowMessage(false, false, false, "Permission OK after relaunch");
 #endif
 
-    QuitOneProcess('BNC!'); // Quit any old instance of BOINC manager
-    sleep(2);
+    //TODO: It would be nice to get the app name from the bundle ID or signature
+    // so we don't have to try all 4 and to allow for future branded versions
+
+    for (;;) {
+        BOINCManagerPID = FindProcessPID("BOINCManager", 0);
+        if (BOINCManagerPID == 0) break;
+        kill(BOINCManagerPID, SIGTERM);
+        sleep(2);
+    }
+    
+    for (;;) {
+        BOINCManagerPID = FindProcessPID("GridRepublic Desktop", 0);
+        if (BOINCManagerPID == 0) break;
+        kill(BOINCManagerPID, SIGTERM);
+        sleep(2);
+    }
+    
+    for (;;) {
+        BOINCManagerPID = FindProcessPID("Progress Thru Processors Desktop", 0);
+        if (BOINCManagerPID == 0) break;
+        kill(BOINCManagerPID, SIGTERM);
+        sleep(2);
+    }
+    
+    for (;;) {
+        BOINCManagerPID = FindProcessPID("Charity Engine Desktop", 0);
+        if (BOINCManagerPID == 0) break;
+        kill(BOINCManagerPID, SIGTERM);
+        sleep(2);
+    }
 
     // Core Client may still be running if it was started without Manager
     coreClientPID = FindProcessPID("boinc", 0);
@@ -185,14 +384,14 @@ static OSStatus DoUninstall(void) {
         strlcat(myRmCommand, "\"", sizeof(myRmCommand));
     
 #if TESTING
-        ShowMessage(false, false, "manager: %s", myRmCommand);
+        ShowMessage(false, false, false, "manager: %s", myRmCommand);
 #endif
 
         p = strstr(myRmCommand, notBoot);
         
         if (p == myRmCommand+pathOffset) {
 #if TESTING
-            ShowMessage(false, false, "Not on boot volume: %s", myRmCommand);
+            ShowMessage(false, false, false, "Not on boot volume: %s", myRmCommand);
 #endif
             break;
         } else {
@@ -203,13 +402,13 @@ static OSStatus DoUninstall(void) {
             strlcpy(plistRmCommand, myRmCommand, sizeof(plistRmCommand));
             strlcat(plistRmCommand, "/Contents/info.plist", sizeof(plistRmCommand));
 #if TESTING
-        ShowMessage(false, false, "Deleting info.plist: %s", plistRmCommand);
+        ShowMessage(false, false, false, "Deleting info.plist: %s", plistRmCommand);
 #endif
             system(plistRmCommand); 
             err = LSRegisterFSRef(&theFSRef, true);
 #if TESTING
             if (err)
-                ShowMessage(false, false, "LSRegisterFSRef returned error %d", err);
+                ShowMessage(false, false, false, "LSRegisterFSRef returned error %d", err);
 #endif
             system(myRmCommand);
         }
@@ -225,6 +424,10 @@ static OSStatus DoUninstall(void) {
     // Phase 4: Delete our files and directories at our installer's default locations
     // Remove everything we've installed, whether BOINC, GridRepublic, Progress Thru Processors or
     // Charity Engine
+    
+    //TODO: It would be nice to get the app name from the bundle ID or signature
+    // so we don't have to try all 4 and to allow for future branded versions
+    
     // These first 4 should already have been deleted by the above code, but do them anyway for safety
     system ("rm -rf /Applications/BOINCManager.app");
     system ("rm -rf \"/Library/Screen Savers/BOINCSaver.saver\"");
@@ -232,11 +435,11 @@ static OSStatus DoUninstall(void) {
     system ("rm -rf \"/Applications/GridRepublic Desktop.app\"");
     system ("rm -rf \"/Library/Screen Savers/GridRepublic.saver\"");
     
-    system ("rm -rf \"/Applications/Progress\\ Thru\\ Processors\\ Desktop.app\"");
-    system ("rm -rf \"/Library/Screen Savers/Progress\\ Thru\\ Processors.saver\"");
+    system ("rm -rf \"/Applications/Progress Thru Processors Desktop.app\"");
+    system ("rm -rf \"/Library/Screen Savers/Progress Thru Processors.saver\"");
     
-    system ("rm -rf \"/Applications/Charity\\ Engine\\ Desktop.app\"");
-    system ("rm -rf \"/Library/Screen Savers/Charity\\ Engine.saver\"");
+    system ("rm -rf \"/Applications/Charity Engine Desktop.app\"");
+    system ("rm -rf \"/Library/Screen Savers/Charity Engine.saver\"");
     
     // Delete any receipt from an older installer (which had 
     // a wrapper application around the installer package.)
@@ -287,7 +490,7 @@ static OSStatus DeleteOurBundlesFromDirectory(CFStringRef bundleID, char *extens
 
     dirp = opendir(dirPath);
     if (dirp == NULL) {      // Should never happen
-        ShowMessage(false, false, "opendir(\"%s\") failed", dirPath);
+        ShowMessage(false, false, false, "Error: opendir(\"%s\") failed", dirPath);
         return -1;
     }
     
@@ -322,13 +525,13 @@ static OSStatus DeleteOurBundlesFromDirectory(CFStringRef bundleID, char *extens
                             strlcat(myRmCommand, "\"", sizeof(myRmCommand));
                             if (CFStringCompare(thisID, bundleID, 0) == kCFCompareEqualTo) {
 #if TESTING
-                                ShowMessage(false, false, "Bundles: %s", myRmCommand);                                
+                                ShowMessage(false, false, false, "Bundles: %s", myRmCommand);
 #endif
 
                                system(myRmCommand);
                             } else {
 #if TESTING
-//                                ShowMessage(false, false, "Bundles: Not deleting %s", myRmCommand+pathOffset);
+//                                ShowMessage(false, false, false, "Bundles: Not deleting %s", myRmCommand+pathOffset);
 #endif
                             }
 
@@ -336,26 +539,26 @@ static OSStatus DeleteOurBundlesFromDirectory(CFStringRef bundleID, char *extens
                         } // if (thisID)
 #if TESTING
                         else
-                            ShowMessage(false, false, "CFBundleGetIdentifier failed for index %d", index);                                
+                            ShowMessage(false, false, false, "CFBundleGetIdentifier failed for index %d", index);                                
 #endif
                         CFRelease(thisBundle);                
                } //if (thisBundle)
 #if TESTING
                         else
-                            ShowMessage(false, false, "CFBundleCreate failed for index %d", index);                                
+                            ShowMessage(false, false, false, "CFBundleCreate failed for index %d", index);
 #endif
                 CFRelease(bundleURLRef);                
             } // if (bundleURLRef)
 #if TESTING
         else
-            ShowMessage(false, false, "CFURLCreateWithFileSystemPath failed");                                
+            ShowMessage(false, false, false, "CFURLCreateWithFileSystemPath failed");
 #endif
         
             CFRelease(urlStringRef);
         } // if (urlStringRef)
 #if TESTING
         else
-            ShowMessage(false, false, "CFStringCreateWithCString failed");                                
+            ShowMessage(false, false, false, "CFStringCreateWithCString failed");
 #endif
     }   // while true
     
@@ -375,7 +578,6 @@ enum {
 // For now, don't delete user's BOINC Preferences file.
 static OSStatus CleanupAllVisibleUsers(void)
 {
-    long                OSVersion = 0;
     passwd              *pw;
     vector<string>      human_user_names;
     vector<uid_t>       human_user_IDs;
@@ -395,11 +597,6 @@ static OSStatus CleanupAllVisibleUsers(void)
     int                 id;
     OSStatus            err;
     Boolean             changeSaver;
-
-    err = Gestalt(gestaltSystemVersion, &OSVersion);
-    if (err != noErr) {
-        OSVersion = 0;
-    }
 
     saved_uid = getuid();
     saved_euid = geteuid();
@@ -428,7 +625,7 @@ static OSStatus CleanupAllVisibleUsers(void)
                 human_user_names.push_back(string(buf));
                 human_user_IDs.push_back((uid_t)id);
 #if TESTING
-                ShowMessage(false, false, "user ID %d: %s\n", id, buf);
+                ShowMessage(false, false, false, "user ID %d: %s\n", id, buf);
 #endif
                 *(p+1) = ' ';
             }
@@ -468,7 +665,7 @@ static OSStatus CleanupAllVisibleUsers(void)
         // Skip all non-human (non-login) users
         if (flag == 3) { // if (Home Directory == "/var/empty") && (UserShell == "/usr/bin/false")
 #if TESTING
-            ShowMessage(false, false, "Flag=3: skipping user ID %d: %s", human_user_IDs[userIndex-1], buf);
+            ShowMessage(false, false, false, "Flag=3: skipping user ID %d: %s", human_user_IDs[userIndex-1], buf);
 #endif
             continue;
         }
@@ -478,7 +675,7 @@ static OSStatus CleanupAllVisibleUsers(void)
             continue;
 
 #if TESTING
-        ShowMessage(false, false, "Deleting login item for user %s: Posix name=%s, Full name=%s, UID=%d", 
+        ShowMessage(false, false, false, "Deleting login item for user %s: Posix name=%s, Full name=%s, UID=%d",
                 human_user_name, pw->pw_name, pw->pw_gecos, pw->pw_uid);
 #endif
 
@@ -490,18 +687,11 @@ static OSStatus CleanupAllVisibleUsers(void)
         system (s);
 
 #if TESTING
-//    ShowMessage(false, false, "Before seteuid(%d) for user %s, euid = %d", pw->pw_uid, human_user_name, geteuid());
+//    ShowMessage(false, false, false, "Before seteuid(%d) for user %s, euid = %d", pw->pw_uid, human_user_name, geteuid());
 #endif
-        
-        if (OSVersion >= 0x1060) {
-            setuid(0);
-        }
+        setuid(0);
         // Delete our login item(s) for this user
-        if (OSVersion < 0x1070) {
-            seteuid(pw->pw_uid);    // Temporarily set effective uid to this user
-            DeleteLoginItemAPI();
-            seteuid(saved_euid);    // Set effective uid back to privileged user
-        } else if (OSVersion >= 0x1080) {
+       if (compareOSVersionTo(10, 8) >= 0) {
             seteuid(pw->pw_uid);    // Temporarily set effective uid to this user
             DeleteLoginItemFromPListFile();
             seteuid(saved_euid);    // Set effective uid back to privileged user
@@ -512,14 +702,14 @@ static OSStatus CleanupAllVisibleUsers(void)
             // We must launch the System Events application for the target user
 
 #if TESTING
-            ShowMessage(false, false, "Telling System Events to quit (before DeleteLoginItemOSAScript)");
+            ShowMessage(false, false, false, "Telling System Events to quit (before DeleteLoginItemOSAScript)");
 #endif
             // Find SystemEvents process.  If found, quit it in case 
             // it is running under a different user.
             err = QuitOneProcess(kSystemEventsCreator);
 #if TESTING
             if (err != noErr) {
-                ShowMessage(false, false, "QuitOneProcess(kSystemEventsCreator) returned error %d ", (int) err);
+                ShowMessage(false, false, false, "QuitOneProcess(kSystemEventsCreator) returned error %d ", (int) err);
             }
 #endif
             // Wait for the process to be gone
@@ -530,7 +720,7 @@ static OSStatus CleanupAllVisibleUsers(void)
             }
 #if TESTING
             if (i >= 50) {
-                ShowMessage(false, false, "Failed to make System Events quit");
+                ShowMessage(false, false, false, "Failed to make System Events quit");
             }
 #endif
             sleep(2);
@@ -538,16 +728,16 @@ static OSStatus CleanupAllVisibleUsers(void)
             err = LSFindApplicationForInfo(kSystemEventsCreator, NULL, NULL, &appRef, NULL);
             if (err != noErr) {
 #if TESTING
-                ShowMessage(false, false, "LSFindApplicationForInfo(kSystemEventsCreator) returned error %d ", (int) err);
+                ShowMessage(false, false, false, "LSFindApplicationForInfo(kSystemEventsCreator) returned error %d ", (int) err);
 #endif
             } else {
                 FSRefMakePath(&appRef, (UInt8*)systemEventsPath, sizeof(systemEventsPath));
 #if TESTING
-                ShowMessage(false, false, "SystemEvents is at %s", systemEventsPath);
-                ShowMessage(false, false, "Launching SystemEvents for user %s", pw->pw_name);
+                ShowMessage(false, false, false, "SystemEvents is at %s", systemEventsPath);
+                ShowMessage(false, false, false, "Launching SystemEvents for user %s", pw->pw_name);
 #endif
 
-                sprintf(cmd, "sudo -iu \"%s\" \\\"%s/Contents/MacOS/System Events\\\" &", pw->pw_name, systemEventsPath);
+                sprintf(cmd, "sudo -u \"%s\" \"%s/Contents/MacOS/System Events\" &", pw->pw_name, systemEventsPath);
                 err = system(cmd);
                 if (err == noErr) {
                     // Wait for the process to start
@@ -558,7 +748,7 @@ static OSStatus CleanupAllVisibleUsers(void)
                     }
 #if TESTING
                     if (i >= 50) {
-                        ShowMessage(false, false, "Failed to launch System Events for user %s", pw->pw_name);
+                        ShowMessage(false, false, false, "Failed to launch System Events for user %s", pw->pw_name);
                     }
 #endif
                     sleep(2);
@@ -569,7 +759,7 @@ static OSStatus CleanupAllVisibleUsers(void)
                     DeleteLoginItemOSAScript(pw->pw_name, "Charity Engine Desktop");
 #if TESTING
                 } else {
-                    ShowMessage(false, false, "[2] Command: %s returned error %d", cmd, (int) err);
+                    ShowMessage(false, false, false, "[2] Command: %s returned error %d", cmd, (int) err);
 #endif
                 }
             }
@@ -579,11 +769,15 @@ static OSStatus CleanupAllVisibleUsers(void)
 //        sprintf(s, "rm -f \"/Users/%s/Library/Preferences/BOINC Manager Preferences\"", human_user_name);
 //        system (s);
         
+        // Delete per-user BOINC Manager and screensaver files
+        sprintf(s, "rm -fR \"/Users/%s/Library/Application Support/BOINC\"", human_user_name);
+        system (s);
+        
         //  Set screensaver to "Computer Name" default screensaver only 
         //  if it was BOINC, GridRepublic, Progress Thru Processors or Charity Engine.
         changeSaver = false;
         seteuid(pw->pw_uid);    // Temporarily set effective uid to this user
-        if (OSVersion < 0x1060) {
+        if (compareOSVersionTo(10, 6) < 0) {
             f = popen("defaults -currentHost read com.apple.screensaver moduleName", "r");
             if (f) {
                 while (PersistentFGets(s, sizeof(s), f)) {
@@ -625,7 +819,7 @@ static OSStatus CleanupAllVisibleUsers(void)
         }
         
         if (changeSaver) {
-            if (OSVersion < 0x1060) {
+            if (compareOSVersionTo(10, 6) < 0) {
                 system ("defaults -currentHost write com.apple.screensaver moduleName \"Computer Name\"");
                 system ("defaults -currentHost write com.apple.screensaver modulePath \"/System/Library/Frameworks/ScreenSaver.framework/Versions/A/Resources/Computer Name.saver\"");
             } else {
@@ -637,20 +831,20 @@ static OSStatus CleanupAllVisibleUsers(void)
         seteuid(saved_euid);    // Set effective uid back to privileged user
         
 #if TESTING
-//    ShowMessage(false, false, "After seteuid(%d) for user %s, euid = %d, saved_uid = %d", pw->pw_uid, human_user_name, geteuid(), saved_uid);
+//    ShowMessage(false, false, false, "After seteuid(%d) for user %s, euid = %d, saved_uid = %d", pw->pw_uid, human_user_name, geteuid(), saved_uid);
 #endif
     }       // End userIndex loop
     
     sleep(1);
     
-    if (OSVersion >= 0x1070) {
+    if (compareOSVersionTo(10, 7) >= 0) {
 #if TESTING
-        ShowMessage(false, false, "Telling System Events to quit (at end)");
+        ShowMessage(false, false, false, "Telling System Events to quit (at end)");
 #endif
         err = QuitOneProcess(kSystemEventsCreator);
 #if TESTING
         if (err != noErr) {
-            ShowMessage(false, false, "QuitOneProcess(kSystemEventsCreator) returned error %d ", (int) err);
+            ShowMessage(false, false, false, "QuitOneProcess(kSystemEventsCreator) returned error %d ", (int) err);
         }
 #endif
     }
@@ -672,14 +866,14 @@ static OSStatus GetAuthorization(AuthorizationRef * authRef, const char *pathToT
     if (sIsAuthorized)
         return noErr;
     
-    sprintf(prompt, "Enter administrator password to completely remove %s from you computer.\n\n", brandName);
+    sprintf(prompt, (char *)_("Enter your administrator password to completely remove %s from you computer.\n\n"), brandName);
 
     ourAuthRights.count = 0;
     ourAuthRights.items = NULL;
 
     err = AuthorizationCreate (&ourAuthRights, kAuthorizationEmptyEnvironment, kAuthorizationFlagDefaults, authRef);
     if (err != noErr) {
-        ShowMessage(false, false, "AuthorizationCreate returned error %d", err);
+        ShowMessage(false, false, false, "AuthorizationCreate returned error %d", err);
         return err;
     }
      
@@ -725,7 +919,7 @@ static OSStatus DoPrivilegedExec(char *brandName, const char *pathToTool, char *
     err = GetAuthorization(&authRef, pathToTool, brandName);
     if (err != noErr) {
         if (err != errAuthorizationCanceled)
-            ShowMessage(false, false, "GetAuthorization returned error %d", err);
+            ShowMessage(false, false, false, "GetAuthorization returned error %d", err);
         return err;
     }
 
@@ -752,7 +946,7 @@ static OSStatus DoPrivilegedExec(char *brandName, const char *pathToTool, char *
     }
 
 if (err != noErr)
-    ShowMessage(false, false, "\"%s %s %s %s %s %s\" returned error %d", pathToTool, 
+    ShowMessage(false, false, false, "\"%s %s %s %s %s %s\" returned error %d", pathToTool,
                         arg1 ? arg1 : "", arg2 ? arg2 : "", arg3 ? arg3 : "", 
                         arg4 ? arg4 : "", arg5 ? arg5 : "", err);
 
@@ -760,7 +954,7 @@ if (err != noErr)
 }
 
 
-// Used for OS 10.7.x
+// Used for OS <= 10.7
 static void DeleteLoginItemOSAScript(char* user, char* appName)
 {
     char                    cmd[2048];
@@ -770,48 +964,13 @@ static void DeleteLoginItemOSAScript(char* user, char* appName)
     err = system(cmd);
 #if TESTING
     if (err) {
-        ShowMessage(false, false, "Command: %s returned error %d", cmd, err);
+        ShowMessage(false, false, false, "Command: %s returned error %d", cmd, err);
     }
 #endif
 }
     
 
-// Used for OS < OS 10.7
-static void DeleteLoginItemAPI(void)
-{
-    Boolean                 success;
-    int                     numberOfLoginItems, counter;
-    char                    *p, *q;
-
-    success = false;
-
-    numberOfLoginItems = GetCountOfLoginItems(kCurrentUser);
-    
-    // Search existing login items in reverse order, deleting ours
-    for (counter = numberOfLoginItems ; counter > 0 ; counter--)
-    {
-        p = ReturnLoginItemPropertyAtIndex(kCurrentUser, kApplicationNameInfo, counter-1);
-        q = p;
-        while (*q)
-        {
-            // It is OK to modify the returned string because we "own" it
-            *q = toupper(*q);	// Make it case-insensitive
-            q++;
-        }
-            
-        if (strcmp(p, "BOINCMANAGER.APP") == 0)
-            success = RemoveLoginItemAtIndex(kCurrentUser, counter-1);
-        if (strcmp(p, "GRIDREPUBLIC DESKTOP.APP") == 0)
-            success = RemoveLoginItemAtIndex(kCurrentUser, counter-1);
-        if (strcmp(p, "PROGRESS THRU PROCESSORS DESKTOP.APP") == 0)
-            success = RemoveLoginItemAtIndex(kCurrentUser, counter-1);
-        if (strcmp(p, "CHARITY ENGINE DESKTOP.APP") == 0)
-            success = RemoveLoginItemAtIndex(kCurrentUser, counter-1);
-    }
-}
-
-
-// Used for OS 10.8
+// Used for OS >= 10.8
 static void DeleteLoginItemFromPListFile(void)
 {
     Boolean                 success;
@@ -1190,13 +1349,13 @@ static OSStatus QuitOneProcess(OSType signature) {
     while (done == false) {		
         err = GetNextProcess(&thisPSN);
         if (err == procNotFound)	
-            done = true;		// apparently the demo app isn't running.  Odd but not impossible
+            done = true;		// apparently the app isn't running.
         else {		
             err = GetProcessInformation(&thisPSN,&thisPIR);
             if (err != noErr)
                 goto bail;
                     
-            if (thisPIR.processSignature == signature) {	// is it or target process?
+            if (thisPIR.processSignature == signature) {	// is it our target process?
                 err = AECreateDesc(typeProcessSerialNumber, (Ptr)&thisPSN,
                                             sizeof(thisPSN), &thisPSNDesc);
                 if (err != noErr)
@@ -1234,6 +1393,21 @@ bail:
 }
 
 
+// Kill a process if it exists
+static void KillVBoxProcess(char* name) {
+    pid_t   VBoxPid;
+    
+    VBoxPid = FindProcessPID(name, 0);
+    if (!VBoxPid) return;   // No such process
+    
+    kill(VBoxPid, SIGQUIT);
+    sleep(2);
+    if (FindProcessPID(NULL, VBoxPid)) {
+        kill(VBoxPid, SIGKILL);
+    }
+}
+
+
 // Uses usleep to sleep for full duration even if a signal is received
 static void SleepTicks(UInt32 ticksToSleep) {
     UInt32 endSleep, timeNow, ticksRemaining;
@@ -1249,34 +1423,220 @@ static void SleepTicks(UInt32 ticksToSleep) {
 }
 
 
-static Boolean ShowMessage(Boolean allowCancel, Boolean continueButton, const char *format, ...) {
+// Because language preferences are set on a per-user basis, we
+// must get the preferred languages while set to the current 
+// user, before we switch to root in our second pass.
+// So we get the preferred languages here and write them to a
+// temporary file to be retrieved by our second pass.
+// We must do it this way because, for unknown reasons, the
+// CFBundleCopyLocalizationsForPreferences() API does not work
+// correctly if we seteuid and setuid to the logged in user 
+// after running as root.
+
+static void GetPreferredLanguages() {
+    DIR *dirp;
+    struct dirent *dp;
+    char searchPath[MAXPATHLEN];
+    struct stat sbuf;
+    CFMutableArrayRef supportedLanguages;
+    CFStringRef aLanguage;
+    char shortLanguage[32];
+    CFArrayRef preferredLanguages;
+    int i, j, k;
+    char * language;
+    char *uscore;
+    FILE *f;
+
+    // Create an array of all our supported languages
+    supportedLanguages = CFArrayCreateMutable(kCFAllocatorDefault, 100, &kCFTypeArrayCallBacks);
+    
+    aLanguage = CFStringCreateWithCString(NULL, "en", kCFStringEncodingMacRoman);
+    CFArrayAppendValue(supportedLanguages, aLanguage);
+    aLanguage = NULL;
+
+    dirp = opendir(gCatalogsDir);
+    if (!dirp) goto bail;
+    while (true) {
+        dp = readdir(dirp);
+        if (dp == NULL)
+            break;                  // End of list
+
+        if (dp->d_name[0] == '.')
+            continue;               // Ignore names beginning with '.'
+
+        strlcpy(searchPath, gCatalogsDir, sizeof(searchPath));
+        strlcat(searchPath, dp->d_name, sizeof(searchPath));
+        strlcat(searchPath, "/", sizeof(searchPath));
+        strlcat(searchPath, gCatalog_Name, sizeof(searchPath));
+        strlcat(searchPath, ".mo", sizeof(searchPath));
+        // stat() returns zero on success
+        if (stat(searchPath, &sbuf) != 0) continue;
+//        printf("Adding %s to supportedLanguages array\n", dp->d_name);
+        aLanguage = CFStringCreateWithCString(NULL, dp->d_name, kCFStringEncodingMacRoman);
+        CFArrayAppendValue(supportedLanguages, aLanguage);
+        aLanguage = NULL;
+        
+        // If it has a region code ("it_IT") also try without region code ("it")
+        // TODO: Find a more general solution
+        strlcpy(shortLanguage, dp->d_name, sizeof(shortLanguage));
+        uscore = strchr(shortLanguage, '_');
+        if (uscore) {
+            *uscore = '\0';
+            aLanguage = CFStringCreateWithCString(NULL, shortLanguage, kCFStringEncodingMacRoman);
+            CFArrayAppendValue(supportedLanguages, aLanguage);
+            aLanguage = NULL;
+        }
+    }
+    
+    closedir(dirp);
+
+    // Write a temp file to tell our PostInstall.app our preferred languages
+    f = fopen(gTempFileName, "w");
+
+    for (i=0; i<MAX_LANGUAGES_TO_TRY; ++i) {
+    
+        preferredLanguages = CFBundleCopyLocalizationsForPreferences(supportedLanguages, NULL );
+        
+#if 0   // For testing
+        int c = CFArrayGetCount(preferredLanguages);
+        for (k=0; k<c; ++k) {
+        CFStringRef s = (CFStringRef)CFArrayGetValueAtIndex(preferredLanguages, k);
+            printf("Preferred language %u is %s\n", k, CFStringGetCStringPtr(s, kCFStringEncodingMacRoman));
+        }
+
+#endif
+
+        for (j=0; j<CFArrayGetCount(preferredLanguages); ++j) {
+            aLanguage = (CFStringRef)CFArrayGetValueAtIndex(preferredLanguages, j);
+            language = (char *)CFStringGetCStringPtr(aLanguage, kCFStringEncodingMacRoman);
+            if (f) {
+                fprintf(f, "%s\n", language);
+            }
+            
+            // Remove all copies of this language from our list of supported languages 
+            // so we can get the next preferred language in order of priority
+            for (k=CFArrayGetCount(supportedLanguages)-1; k>=0; --k) {
+                if (CFStringCompare(aLanguage, (CFStringRef)CFArrayGetValueAtIndex(supportedLanguages, k), 0) == kCFCompareEqualTo) {
+                    CFArrayRemoveValueAtIndex(supportedLanguages, k);
+                }
+            }
+
+            // Since the original strings are English, no 
+            // further translation is needed for language en.
+            if (!strcmp(language, "en")) {
+                fclose(f);
+                CFRelease(preferredLanguages);
+                preferredLanguages = NULL;
+                CFArrayRemoveAllValues(supportedLanguages);
+                CFRelease(supportedLanguages);
+                supportedLanguages = NULL;
+                return;
+            }
+        }
+        
+        CFRelease(preferredLanguages);
+        preferredLanguages = NULL;
+
+    }
+    fclose(f);
+
+bail:
+    CFArrayRemoveAllValues(supportedLanguages);
+    CFRelease(supportedLanguages);
+    supportedLanguages = NULL;
+}
+
+
+static void LoadPreferredLanguages(){
+    FILE *f;
+    int i;
+    char *p;
+    char language[32];
+
+    BOINCTranslationInit();
+
+    // First pass wrote a list of our preferred languages to a temp file
+    f = fopen(gTempFileName, "r");
+    if (!f) return;
+    
+    for (i=0; i<MAX_LANGUAGES_TO_TRY; ++i) {
+        fgets(language, sizeof(language), f);
+        if (feof(f)) break;
+        language[sizeof(language)-1] = '\0';    // Guarantee a null terminator
+        p = strchr(language, '\n');
+        if (p) *p = '\0';           // Replace newline with null terminator 
+        if (language[0]) {
+            if (!BOINCTranslationAddCatalog(gCatalogsDir, language, gCatalog_Name)) {
+                printf("could not load catalog for langage %s\n", language);
+            }
+        }
+    }
+    fclose(f);
+}
+
+
+static Boolean ShowMessage(Boolean allowCancel, Boolean continueButton, Boolean yesNoButtons, const char *format, ...) {
     va_list                 args;
     char                    s[1024];
-    short                   itemHit;
-    AlertStdAlertParamRec   alertParams;
-    
-    ProcessSerialNumber	ourProcess;
+    CFOptionFlags           responseFlags;
+    CFURLRef                myIconURLRef = NULL;
+    CFBundleRef             myBundleRef;
+    CFDictionaryRef         myInfoPlistData;
+    CFStringRef             appIconName;
+    ProcessSerialNumber     ourProcess;
+    Boolean                 result;
+
+    myBundleRef = CFBundleGetMainBundle();
+    if (myBundleRef) {
+        if (!strcmp(gBrandName, "BOINC")) {
+            // For BOINC uninstaller use our special icon
+            myIconURLRef = CFBundleCopyResourceURL(myBundleRef, CFSTR("PutInTrash.icns"), NULL, NULL);
+        } else {
+            // For branded uninstaller (GR, CE, PtP) use uninstaller application icon
+            myInfoPlistData = CFBundleGetInfoDictionary(myBundleRef);
+            if (myInfoPlistData) {
+                appIconName = (CFStringRef)CFDictionaryGetValue(myInfoPlistData, CFSTR("CFBundleIconFile"));
+                myIconURLRef = CFBundleCopyResourceURL(myBundleRef, appIconName, NULL, NULL);
+            }
+        }
+    }
 
     va_start(args, format);
-    s[0] = vsprintf(s+1, format, args);
+    vsprintf(s, format, args);
     va_end(args);
 
-    alertParams.movable = true;
-    alertParams.helpButton = false;
-    alertParams.filterProc = NULL;
-    alertParams.defaultText = continueButton? "\pContinue..." : (StringPtr)-1;
-    alertParams.cancelText = allowCancel ? (StringPtr)-1 : NULL;
-    alertParams.otherText = NULL;
-    alertParams.defaultButton = kAlertStdAlertOKButton;
-    alertParams.cancelButton = allowCancel ? kAlertStdAlertCancelButton : 0;
-    alertParams.position = kWindowDefaultPosition;
+    CFStringRef myString = CFStringCreateWithCString(NULL, s, kCFStringEncodingUTF8);
+    CFStringRef theTitle = CFStringCreateWithCString(NULL, gAppName, kCFStringEncodingUTF8);
+    CFStringRef cancelString = CFStringCreateWithCString(NULL, (char*)_("Cancel"), kCFStringEncodingUTF8);
+    CFStringRef continueString = CFStringCreateWithCString(NULL, (char*)_("Continue..."), kCFStringEncodingUTF8);
+    CFStringRef yesString = CFStringCreateWithCString(NULL, (char*)_("Yes"), kCFStringEncodingUTF8);
+    CFStringRef noString = CFStringCreateWithCString(NULL, (char*)_("No"), kCFStringEncodingUTF8);
 
     ::GetCurrentProcess (&ourProcess);
     ::SetFrontProcess(&ourProcess);
 
-    StandardAlert (kAlertNoteAlert, (StringPtr)s, NULL, &alertParams, &itemHit);
+    // Set default button to Continue, OK or No
+    // Set alternate button to Cancel, Yes, or hidden
+    SInt32 retval = CFUserNotificationDisplayAlert(0.0, kCFUserNotificationPlainAlertLevel,
+                myIconURLRef, NULL, NULL, theTitle, myString,
+                continueButton ? continueString : (yesNoButtons ? noString : NULL),
+                (allowCancel || yesNoButtons) ? (yesNoButtons ? yesString : cancelString) : NULL,
+                NULL, &responseFlags);
     
-    return (itemHit == kAlertStdAlertOKButton);
+    if (myIconURLRef) CFRelease(myIconURLRef);
+    if (myString) CFRelease(myString);
+    if (theTitle) CFRelease(theTitle);
+    if (cancelString) CFRelease(cancelString);
+    if (continueString) CFRelease(continueString);
+    if (yesString) CFRelease(yesString);
+    if (noString) CFRelease(noString);
+
+    if (retval) return false;
+    
+    result = (responseFlags == kCFUserNotificationDefaultResponse);
+    // Return TRUE if user clicked Continue, Yes or OK, FALSE if user clicked Cancel or No
+    // Note: if yesNoButtons is true, we made default button "No" and alternate button "Yes" 
+    return (yesNoButtons ? !result : result);
 }
 
 
@@ -1290,7 +1650,7 @@ static OSStatus GetpathToBOINCManagerApp(char* path, int maxLen, FSRef *theFSRef
         status = LSFindApplicationForInfo(creator, bundleID, NULL, theFSRef, NULL);
         if (status) {
 #if TESTING
-            ShowMessage(false, false, "LSFindApplicationForInfo returned error %d", status);
+            ShowMessage(false, false, false, "LSFindApplicationForInfo returned error %d", status);
 #endif 
             return status;
         }
@@ -1298,9 +1658,33 @@ static OSStatus GetpathToBOINCManagerApp(char* path, int maxLen, FSRef *theFSRef
         status = FSRefMakePath(theFSRef, (unsigned char *)path, maxLen);
 #if TESTING
         if (status)
-            ShowMessage(false, false, "GetpathToBOINCManagerApp FSRefMakePath returned error %d, %s", status, path);
+            ShowMessage(false, false, false, "GetpathToBOINCManagerApp FSRefMakePath returned error %d, %s", status, path);
 #endif
     
     return status;
 }
 #endif  // SEARCHFORALLBOINCMANAGERS
+
+
+static int compareOSVersionTo(int toMajor, int toMinor) {
+    SInt32 major, minor;
+    OSStatus err = noErr;
+    
+    err = Gestalt(gestaltSystemVersionMajor, &major);
+    if (err != noErr) {
+        fprintf(stderr, "Gestalt(gestaltSystemVersionMajor) returned error %ld\n", err);
+        fflush(stderr);
+        return -1;  // gestaltSystemVersionMajor selector was not available before OS 10.4
+    }
+    if (major < toMajor) return -1;
+    if (major > toMajor) return 1;
+    err = Gestalt(gestaltSystemVersionMinor, &minor);
+    if (err != noErr) {
+        fprintf(stderr, "Gestalt(gestaltSystemVersionMinor) returned error %ld\n", err);
+        fflush(stderr);
+        return -1;  // gestaltSystemVersionMajor selector was not available before OS 10.4
+    }
+    if (minor < toMinor) return -1;
+    if (minor > toMinor) return 1;
+    return 0;
+}

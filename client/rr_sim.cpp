@@ -23,8 +23,10 @@
 // - deadline misses (per-project count, per-result flag)
 //      Deadline misses are not counted for tasks
 //      that are too large to run in RAM right now.
-// - resource shortfalls (per-project and total)
-// - counts of resources idle now
+// - for each resource type (in RSC_WORK_FETCH):
+//    - shortfall
+//    - nidle_now: # of idle instances
+//    - sim_excluded_instances: bitmap of instances idle because of exclusions
 //
 // For coprocessors, we saturate the resource if possible;
 // i.e. with 2 GPUs, we'd let a 1-GPU app and a 2-GPU app run together.
@@ -53,10 +55,27 @@ inline void rsc_string(RESULT* rp, char* buf) {
     if (avp->gpu_usage.rsc_type) {
         sprintf(buf, "%.2f CPU + %.2f %s",
             avp->avg_ncpus, avp->gpu_usage.usage,
-            rsc_name(avp->gpu_usage.rsc_type)
+            rsc_name_long(avp->gpu_usage.rsc_type)
         );
     } else {
         sprintf(buf, "%.2f CPU", avp->avg_ncpus);
+    }
+}
+
+// set "nused" bits of the source bitmap in the dest bitmap
+//
+static inline void set_bits(int src, double nused, int& dst) {
+    // if all bits are already set, we're done
+    //
+    if ((src&dst) == src) return;
+    int bit = 1;
+    for (int i=0; i<32; i++) {
+        if (nused <= 0) break;
+        if (bit & src) {
+            dst |= bit;
+            nused -= 1;
+        }
+        bit <<= 1;
     }
 }
 
@@ -74,8 +93,21 @@ struct RR_SIM {
         int rt = rp->avp->gpu_usage.rsc_type;
         if (rt) {
             rsc_work_fetch[rt].sim_nused += rp->avp->gpu_usage.usage;
-            rsc_work_fetch[rt].sim_used_instances |= rp->app->non_excluded_instances[rt];
             p->rsc_pwf[rt].sim_nused += rp->avp->gpu_usage.usage;
+            if (rsc_work_fetch[rt].has_exclusions) {
+                set_bits(
+                    rp->app->non_excluded_instances[rt],
+                    p->rsc_pwf[rt].nused_total,
+                    rsc_work_fetch[rt].sim_used_instances
+                );
+#if 0
+                msg_printf(p, MSG_INFO, "%d non_excl %d used %d",
+                    rt,
+                    rp->app->non_excluded_instances[rt],
+                    rsc_work_fetch[rt].sim_used_instances
+                );
+#endif
+            }
         }
     }
 
@@ -126,7 +158,7 @@ void print_deadline_misses() {
                 msg_printf(p, MSG_INFO,
                     "[rr_sim] Project has %d projected %s deadline misses",
                     p->rsc_pwf[j].deadlines_missed,
-                    rsc_name(j)
+                    rsc_name_long(j)
                 );
             }
         }
@@ -148,6 +180,7 @@ void RR_SIM::init_pending_lists() {
     for (unsigned int i=0; i<gstate.results.size(); i++) {
         RESULT* rp = gstate.results[i];
         rp->rr_sim_misses_deadline = false;
+        rp->already_selected = false;
         if (!rp->nearly_runnable()) continue;
         if (rp->some_download_stalled()) continue;
         if (rp->project->non_cpu_intensive) continue;
@@ -236,13 +269,14 @@ void RR_SIM::pick_jobs_to_run(double reltime) {
                 //
                 activate(rp);
                 adjust_rec_sched(rp);
-                if (log_flags.rrsim_detail) {
+                if (log_flags.rrsim_detail && !rp->already_selected) {
                     char buf[256];
                     rsc_string(rp, buf);
                     msg_printf(rp->project, MSG_INFO,
-                        "[rr_sim_detail] %.2f: starting %s (%s)",
-                        reltime, rp->name, buf
+                        "[rr_sim_detail] %.2f: starting %s (%s) (%.2fG/%.2fG)",
+                        reltime, rp->name, buf, rp->rrsim_flops_left/1e9, rp->rrsim_flops/1e9
                     );
+                    rp->already_selected = true;
                 }
 
                 // check whether resource is saturated
@@ -380,6 +414,13 @@ void RR_SIM::simulate() {
         // see if we finish a time slice before first job ends
         //
         double delta_t = rpbest->rrsim_finish_delay;
+        if (log_flags.rrsim_detail) {
+            msg_printf(NULL, MSG_INFO,
+                "[rrsim_detail] rpbest: %s (finish delay %.2f)",
+                rpbest->name,
+                delta_t
+            );
+        }
         if (delta_t > 3600) {
             rpbest = 0;
 
@@ -390,14 +431,22 @@ void RR_SIM::simulate() {
             } else {
                 delta_t = 3600;
             }
+            if (log_flags.rrsim_detail) {
+                msg_printf(NULL, MSG_INFO,
+                    "[rrsim_detail] time-slice step of %.2f sec", delta_t
+                );
+            }
         } else {
             rpbest->rrsim_done = true;
             pbest = rpbest->project;
             if (log_flags.rr_simulation) {
+                char buf[256];
+                rsc_string(rpbest, buf);
                 msg_printf(pbest, MSG_INFO,
-                    "[rr_sim] %.2f: %s finishes (%.2fG/%.2fG)",
-                    sim_now - gstate.now,
+                    "[rr_sim] %.2f: %s finishes (%s) (%.2fG/%.2fG)",
+                    sim_now + delta_t - gstate.now,
                     rpbest->name,
+                    buf,
                     rpbest->estimated_flops_remaining()/1e9, rpbest->rrsim_flops/1e9
                 );
             }
@@ -440,30 +489,9 @@ void RR_SIM::simulate() {
             }
         }
 
-#if 1
         for (int i=0; i<coprocs.n_rsc; i++) {
             rsc_work_fetch[i].update_stats(sim_now, delta_t, buf_end);
         }
-#else
-        // update saturated time
-        //
-        double end_time = sim_now + delta_t;
-        double x = end_time - gstate.now;
-        for (int i=0; i<coprocs.n_rsc; i++) {
-            rsc_work_fetch[i].update_saturated_time(x);
-        }
-
-        // increment resource shortfalls
-        //
-        if (sim_now < buf_end) {
-            if (end_time > buf_end) end_time = buf_end;
-            double d_time = end_time - sim_now;
-
-            for (int i=0; i<coprocs.n_rsc; i++) {
-                rsc_work_fetch[i].accumulate_shortfall(d_time);
-            }
-        }
-#endif
 
         // update project REC
         //
@@ -480,7 +508,7 @@ void RR_SIM::simulate() {
                 sim_now+delta_t,
                 sim_now,
                 x,
-                config.rec_half_life,
+                cc_config.rec_half_life,
                 p->pwf.rec_temp,
                 dtemp
             );
@@ -494,6 +522,7 @@ void RR_SIM::simulate() {
     //
     for (int i=1; i<coprocs.n_rsc; i++) {
         RSC_WORK_FETCH& rwf = rsc_work_fetch[i];
+        if (!rwf.has_exclusions) continue;
         COPROC& cp = coprocs.coprocs[i];
         int mask = (1<<cp.count)-1;
         rwf.sim_excluded_instances = ~(rwf.sim_used_instances) & mask;

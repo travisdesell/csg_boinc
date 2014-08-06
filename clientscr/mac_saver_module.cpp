@@ -49,6 +49,7 @@ extern "C" {
 #include "Mac_Saver_Module.h"
 #include "screensaver.h"
 #include "diagnostics.h"
+#include "str_replace.h"
 
 //#include <drivers/event_status_driver.h>
 
@@ -111,18 +112,13 @@ const char *  RunningOnBatteryMsg = "Computing and screensaver disabled while ru
 // multiple times (once for each display), so we need to guard 
 // against any problems that may cause.
 void initBOINCSaver() {
-#ifdef _DEBUG
-    char buf1[256], buf2[256];
-    strcpy(buf1, getenv("HOME"));
-    strcat(buf1, "/Documents/ss_stdout");
-    strcpy(buf2, getenv("HOME"));
-    strcat(buf2, "/Documents/ss_stderr");
-
-    diagnostics_init(BOINC_DIAG_REDIRECTSTDOUTOVERWRITE
-        | BOINC_DIAG_REDIRECTSTDERROVERWRITE
-        | BOINC_DIAG_TRACETOSTDOUT, buf1, buf2
+    diagnostics_init(
+        BOINC_DIAG_PERUSERLOGFILES |
+        BOINC_DIAG_REDIRECTSTDOUT |
+        BOINC_DIAG_REDIRECTSTDERR |
+        BOINC_DIAG_TRACETOSTDOUT,
+        "stdoutscr", "stderrscr"
         );
-#endif
 
     if (gspScreensaver == NULL) {
         gspScreensaver = new CScreensaver();
@@ -413,8 +409,8 @@ OSStatus CScreensaver::initBOINCApp() {
       // We don't customize BOINC Data directory name for branding
 #if 0   // Code for separate data in each user's private directory
         char buf[256];
-        strcpy(buf, getenv("HOME"));
-        strcat(buf, "/Library/Application Support/BOINC Data");
+        safe_strcpy(buf, getenv("HOME"));
+        safe_strcat(buf, "/Library/Application Support/BOINC Data");
         status = chdir(buf);
 #else   // All users share the same data
         status = chdir("/Library/Application Support/BOINC Data");
@@ -442,7 +438,7 @@ int CScreensaver::getSSMessage(char **theMessage, int* coveredFreq) {
     int newFrequency = TEXTLOGOFREQUENCY;
     *coveredFreq = 0;
     pid_t myPid;
-    CC_STATE state;
+    CC_STATE ccstate;
     OSStatus err;
     
     if (ScreenIsBlanked) {
@@ -471,11 +467,11 @@ int CScreensaver::getSSMessage(char **theMessage, int* coveredFreq) {
             if (!rpc->init(NULL)) {     // Initialize communications with Core Client
                 m_bConnected = true;
                 if (IsDualGPUMacbook) {
-                    state.clear();
-                    state.global_prefs.clear_bools();
-                    int result = rpc->get_state(state);
+                    ccstate.clear();
+                    ccstate.global_prefs.clear_bools();
+                    int result = rpc->get_state(ccstate);
                     if (!result) {
-                        OKToRunOnBatteries = state.global_prefs.run_on_batteries;
+                        OKToRunOnBatteries = ccstate.global_prefs.run_on_batteries;
                     } else {
                         OKToRunOnBatteries = false;
                     }
@@ -1020,8 +1016,8 @@ void print_to_log_file(const char *format, ...) {
     char buf[256];
     time_t t;
 #if USE_SPECIAL_LOG_FILE
-    strcpy(buf, getenv("HOME"));
-    strcat(buf, "/Documents/test_log.txt");
+    safe_strcpy(buf, getenv("HOME"));
+    safe_strcat(buf, "/Documents/test_log.txt");
     FILE *f;
     f = fopen(buf, "a");
     if (!f) return;
@@ -1032,7 +1028,7 @@ void print_to_log_file(const char *format, ...) {
     #define f stderr
 #endif
     time(&t);
-    strcpy(buf, asctime(localtime(&t)));
+    safe_strcpy(buf, asctime(localtime(&t)));
     strip_cr(buf);
 
     fputs(buf, f);

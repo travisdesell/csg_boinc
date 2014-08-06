@@ -37,6 +37,28 @@ array(
 
 $win = array(
 array(
+    'http://code.google.com/p/boinc-client-configuration/',
+    'BOINC Client Configuration',
+    '1.2.5',
+    'Windows GUI for editing the client configuration file',
+    'http://code.google.com/p/boinc-client-configuration/',
+    'Windows',
+    'BOINC Client Configuration provides a graphical user interface (GUI) for editing the BOINC client configuration file (cc_config.xml)',
+    1382122439
+),
+array(
+    'http://www.setispirit.de/',
+    'SETISpirit',
+    '1.0.4',
+    'SETIspirit is free add-on tool for SETI@home users which provides information about the tasks, the SETI@home project status, workunits and credits, statistic charts and a detailed sky map.',
+    'http://www.setispirit.de/',
+    'Windows',
+    'SETIspirit presents a complete overview about the BOINC workunits, e. g. the number of workunits available/completed as well as the overall workunit status (downloading, ready to run, running, wu progress, uploading, ready to report). SETIspirit shows the user and host credits and the most recent project server states (download and upload server, scheduler service). The statistic module shows the calculated workunits in week-, month- or year charts.
+
+    The SETIspirit sky map shows the position where the workunit is recorded and much more details (report deadline, recorded on/at, wu type, slot, cpu time, time left) as well as the current results of the workunit analysis (spikes, gaussians, pulses and triplets found). The sky map shows all known 88 constellations with constellations shapes and deep sky photographies. The database (db) offers some interesting facts about the constellations.',
+    1371112500
+),
+array(
     'http://www.myfavoritegadgets.info/monitors/BOINCMonitor/BOINCMonitor.html',
     'BOINC Monitor',
     '',
@@ -69,7 +91,7 @@ array(
 array(
     'http://www.bc-team.org/downloads.php',
     'BOINCcalculator',
-    '0.3.2',
+    '0.5.1',
     'Show details of CPDN jobs',
     'http://wiki.bc-team.org/index.php?title=BOINCcalculator',
     'Windows (all)',

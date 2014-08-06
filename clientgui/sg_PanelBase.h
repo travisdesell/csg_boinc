@@ -22,16 +22,6 @@
 #include "sg_BoincSimpleFrame.h"
 
 
-// TODO: Move these to events.h
-enum{
-    ID_CHANGE_SLIDE_TIMER = 14000,
-	WEBSITE_URL_MENU_ID = 34500,
-	WEBSITE_URL_MENU_ID_REMOVE_PROJECT = 34550,
-	WEBSITE_URL_MENU_ID_HOMEPAGE = 34551,
-};
-
-
-
 ///////////////////////////////////////////////////////////////////////////
 
 #ifdef __WXMAC__
@@ -54,7 +44,7 @@ enum{
 #ifdef __WXMAC__
 #include "MacBitmapComboBox.h"
 #else
-#include "BOINCBitmapComboBox.h"
+#define CBOINCBitmapComboBox wxBitmapComboBox
 #endif
 
 

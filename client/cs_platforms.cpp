@@ -41,7 +41,6 @@ LPFN_ISWOW64PROCESS fnIsWow64Process;
 #endif
 
 #if defined(__APPLE__) && (defined(__i386__) || defined(__x86_64__))
-#include <CoreServices/CoreServices.h>
 #include <sys/sysctl.h>
 #endif
 
@@ -100,15 +99,12 @@ void CLIENT_STATE::detect_platforms() {
 #elif defined(__APPLE__)
 
 #if defined(__i386__) || defined(__x86_64__)
-    OSStatus err = noErr;
-    SInt32 version = 0;
     int response = 0;
     int retval = 0;
     size_t len = sizeof(response);
 
-    err = Gestalt(gestaltSystemVersion, &version);
     retval = sysctlbyname("hw.optional.x86_64", &response, &len, NULL, 0);
-    if ((err == noErr) && (version >= 0x1050) && response && (!retval)) {
+    if (!retval) {
         add_platform("x86_64-apple-darwin");
     }
 
@@ -142,7 +138,7 @@ void CLIENT_STATE::detect_platforms() {
         strlcat(cmdline," -m",256);
         if ((f=popen(cmdline,"r"))) {
             while (!std::feof(f)) {
-                fgets(cmdline,256,f);
+                if (!fgets(cmdline,256,f)) break;
                 if (strstr(cmdline,"x86_64")) support64=1;
             }
             pclose(f);
@@ -191,7 +187,7 @@ void CLIENT_STATE::detect_platforms() {
                         f = popen(cmdline, "r");
                         if (f) {
                             while (!std::feof(f)) {
-                                fgets(cmdline,256,f);
+                                if (!fgets(cmdline,256,f)) break;
                                 // If the library is 32-bit ELF, then we're
                                 // golden.
                                 if (strstr(cmdline, "ELF") && strstr(cmdline, "32-bit")) support32=1;
@@ -299,7 +295,7 @@ void CLIENT_STATE::detect_platforms() {
 
 #endif
 
-    if (config.no_alt_platform) {
+    if (cc_config.no_alt_platform) {
         PLATFORM p = platforms[0];
         platforms.clear();
         platforms.push_back(p);
@@ -307,8 +303,8 @@ void CLIENT_STATE::detect_platforms() {
 
     // add platforms listed in cc_config.xml AFTER the above.
     //
-    for (unsigned int i=0; i<config.alt_platforms.size(); i++) {
-        add_platform(config.alt_platforms[i].c_str());
+    for (unsigned int i=0; i<cc_config.alt_platforms.size(); i++) {
+        add_platform(cc_config.alt_platforms[i].c_str());
     }
 }
 

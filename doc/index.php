@@ -13,6 +13,7 @@ if ($host == "bolt.berkeley.edu") {
 
 require_once("docutil.php");
 require_once("../html/inc/translation.inc");
+require_once("../html/inc/language_names.inc");
 
 function show_participant() {
     $i = rand(0, 99);
@@ -90,15 +91,11 @@ function show_participate() {
         </td></tr>
         <tr><td>
         <p>
-        ".sprintf(
-            tra(" Use the idle time on your computer (Windows, Mac, or Linux) to cure diseases, study global warming, discover pulsars, and do many other types of scientific research.  It's safe, secure, and easy:  %sChoose%s projects  %sDownload%s and run BOINC software  %sEnter%s an email address and password. "),
-            "<ol> <li> <a href=projects.php><b>",
-            "</b></a>",
-            "<li> <a href=download.php><b>",
-            "</b></a>",
-            "<li> <b>",
-            "</b>"
-        )."
+        ".tra("Use the idle time on your computer (Windows, Mac, Linux, or Android) to cure diseases, study global warming, discover pulsars, and do many other types of scientific research.  It's safe, secure, and easy:")."
+        <ol>
+        <li> <a href=projects.php>".tra("Choose projects")."</a>
+        <li> <a href=download.php>".tra("Download BOINC software")."</a>
+        <li> ".tra("Enter an email address and password.")."
         </ol>
         <p>
         ".sprintf(
@@ -110,6 +107,12 @@ function show_participate() {
             "<a href=\"http://bam.boincstats.com/\">",
             "</a>"
         )."
+        <p>
+        For Android devices, download the BOINC or
+        <a href=http://www.htc.com/www/go/power-to-give-faqs/>HTC Power To Give</a> app from the Google Play Store.
+        <a href=http://www.htc.com/www/go/power-to-give-faqs/>
+        <img align=right valign=top height=50 src=images/htc-power-to-give.jpg>
+        </a>
         </td></tr>
     ";
 }
@@ -197,51 +200,6 @@ function show_nsf() {
         and do not necessarily reflect the views of the National Science Foundation.
         </span>
         </td></tr>
-    ";
-}
-
-// how to add language names:
-// paste into notepad++, select ANSI format,
-// then copy/paste into here
-function language_form() {
-    echo "
-        <table><tr><td>
-        <form name=language method=get action=set_language.php>
-        <select class=selectbox name=lang onchange=\"javascript: submit()\">
-        <option value=auto selected=\"selected\">-- language --
-        <option value=auto>".tra("Browser default")
-        //."<option value=ar>العربية (Arabic)"
-        //."<option value=be>Беларускі (Belarusian)"
-        //."<option value=bg>Българск� (Bulgarian)"
-        ."<option value=ca>Català(Catalan)"
-        ."<option value=cs>Čeština (Czech)"
-        ."<option value=de>Deutsch (German)"
-        ."<option value=en>English"
-        ."<option value=es>Espa&ntilde;ol (Spanish)"
-        ."<option value=fi>Suomi (Finnish)"
-        ."<option value=fr>Fran&ccedil;ais (French)"
-        ."<option value=el>﻿Ελληνικά (Greek)"
-        ."<option value=he>Hebrew (עִבְרִית)"
-        ."<option value=hu>Magyar (Hungarian)"
-        ."<option value=it>Italiano (Italian)"
-        ."<option value=ja>日本語 (Japanese)"
-        ."<option value=ko>한국어 (Korean)"
-        ."<option value=lt>Lietuvių (Lithuanian)"
-        ."<option value=nl>Nederlands (Dutch)"
-        //."<option value=pl>Polski (Polish)"
-        ."<option value=pt_PT>Portugu&ecirc;s (Portuguese)"
-        //."<option value=pt_BR>Portugu&ecirc;s - Brasil (Portuguese - Brazil)"
-        ."<option value=ru>Русский (Russian)"
-        //."<option value=sk>Slovenčina (Slovakian)"
-        ."<option value=sl> Slovenščina (Slovenian)"
-        ."<option value=tr>Türkçe (Turkish)"
-        ."<option value=zh_CN>简体中文 (Chinese)"
-        ."</select>
-        </form>
-        <script type=\"text/javascript\">
-        document.language.lang.selectedIndex=0;
-        </script>
-            </td></tr></table>
     ";
 }
 

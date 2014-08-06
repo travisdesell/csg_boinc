@@ -30,6 +30,8 @@
 #include "proxy_info.h"
 #include "coproc.h"
 
+#define DEFAULT_MAX_EVENT_LOG_LINES 2000
+
 struct XML_PARSER;
 
 #define MAX_FILE_XFERS_PER_PROJECT      2
@@ -50,6 +52,8 @@ struct LOG_FLAGS {
 
     // off by default; intended for developers and testers
     //
+    bool android_debug;
+        // show Android-specific info (battery etc.)
     bool app_msg_receive;
         // show shared-mem message from apps
     bool app_msg_send;
@@ -127,12 +131,13 @@ struct EXCLUDE_GPU {
     int device_num;         // -1 means all instances
 
     int parse(XML_PARSER&);
+    void write(MIOFILE&);
 };
 
 // if you add anything, you must add it to
 // defaults(), parse_options(), and write()
 //
-struct CONFIG {
+struct CC_CONFIG {
     bool abort_jobs_on_exit;
     bool allow_multiple_clients;
     bool allow_remote_gui_rpc;
@@ -188,7 +193,7 @@ struct CONFIG {
         // overrides use_certs
     bool vbox_window;
 
-    CONFIG();
+    CC_CONFIG();
     void defaults();
 	int parse(FILE*);
 	int parse(XML_PARSER&, LOG_FLAGS&);

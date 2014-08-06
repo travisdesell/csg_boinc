@@ -37,9 +37,12 @@ struct PLAN_CLASS_SPEC {
     double projected_flops_scale;
     bool have_os_regex;
     regex_t os_regex;
+    double min_os_version;
+    double max_os_version;
     char project_prefs_tag[256];
     bool have_project_prefs_regex;
     regex_t project_prefs_regex;
+    bool project_prefs_default_true;
     double avg_ncpus;
     int min_core_client_version;
     int max_core_client_version;
@@ -63,7 +66,8 @@ struct PLAN_CLASS_SPEC {
     // AMD/ATI apps
     //
     bool need_ati_libs;
-        // need DLLs w/ ati name (default: amd)
+    bool need_amd_libs;
+        // need DLLs w/ ATI or AMD name (default: neither)
     int min_cal_target;
     int max_cal_target;
     bool without_opencl; // restrict to CAL only GPUs
@@ -84,13 +88,16 @@ struct PLAN_CLASS_SPEC {
     int max_opencl_version;
     int min_opencl_driver_revision;
     int max_opencl_driver_revision;
+    bool double_precision_fp;
 
     // VirtualBox apps
     //
     int min_vbox_version;
     int max_vbox_version;
+    bool vm_accel_required;
 
     int parse(XML_PARSER&);
+    bool opencl_check(OPENCL_DEVICE_PROP&);
     bool check(SCHEDULER_REQUEST& sreq, HOST_USAGE& hu);
     PLAN_CLASS_SPEC();
 };

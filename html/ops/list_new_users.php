@@ -68,7 +68,7 @@ while ($row = mysql_fetch_object($result)) {
     
     $team_name="";
     if($row->teamid > 0){
-        $team = lookup_team($row->teamid);
+        $team = BoincTeam::lookup_id($row->teamid);
         $team_name = $team->name;
     }
     
@@ -110,7 +110,7 @@ while ($row = mysql_fetch_object($result)) {
         $email = "<span style=\"color: #ff0000\">".$email."</span>\n";
     }
 
-    table_row($id, "<a href=\"manage_user.php?userid=".$id."\" target=\"_user\">".$name."</a> ".$roles, $email,
+    table_row($id, "<a href=\"manage_user.php?userid=".$id."\">".$name."</a> ".$roles, $email,
         $team_name, $country, $joined);
 }
 end_table();

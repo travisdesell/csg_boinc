@@ -89,20 +89,6 @@ wxString astrTimeOfDayStrings[] = {
 };
 
 
-int iDiskUsageArraySize = 10;
-wxString astrDiskUsageStrings[] = {
-    _("100 MB"),
-    _("200 MB"),
-    _("500 MB"),
-    _("1 GB"),
-    _("2 GB"),
-    _("5 GB"),
-    _("10 GB"),
-    _("20 GB"),
-    _("50 GB"),
-    _("100 GB")
-};
-
 // Used for sorting disk usage values
 static int CompareDiskUsage(const wxString& strFirst, const wxString& strSecond) {
     long lFirstValue;
@@ -131,16 +117,16 @@ static int CompareDiskUsage(const wxString& strFirst, const wxString& strSecond)
 
 int iCPUUsageArraySize = 10;
 wxString astrCPUUsageStrings[] = {
-    _("10%"),
-    _("20%"),
-    _("30%"),
-    _("40%"),
-    _("50%"),
-    _("60%"),
-    _("70%"),
-    _("80%"),
-    _("90%"),
-    _("100%")
+    wxT("10%"),
+    wxT("20%"),
+    wxT("30%"),
+    wxT("40%"),
+    wxT("50%"),
+    wxT("60%"),
+    wxT("70%"),
+    wxT("80%"),
+    wxT("90%"),
+    wxT("100%")
 };
 
 // Used for sorting cpu usage values
@@ -165,13 +151,13 @@ static int CompareCPUUsage(const wxString& strFirst, const wxString& strSecond) 
 
 int iWorkWhenIdleArraySize = 7;
 wxString astrWorkWhenIdleStrings[] = {
-    _("1"),
-    _("3"),
-    _("5"),
-    _("10"),
-    _("15"),
-    _("30"),
-    _("60")
+    wxT("1"),
+    wxT("3"),
+    wxT("5"),
+    wxT("10"),
+    wxT("15"),
+    wxT("30"),
+    wxT("60")
 };
 
 // Used for sorting work when idle values
@@ -276,7 +262,7 @@ void CPanelPreferences::CreateControls()
     wxBoxSizer* itemBoxSizer2 = new wxBoxSizer(wxVERTICAL);
     itemDialog1->SetSizer(itemBoxSizer2);
 
-    wxFlexGridSizer* itemFlexGridSizer3 = new wxFlexGridSizer(1, 1, 0, 0);
+    wxFlexGridSizer* itemFlexGridSizer3 = new wxFlexGridSizer(1, 0, 0);
     itemBoxSizer2->Add(itemFlexGridSizer3, 0, wxGROW|wxALL, 5);
 
     CTransparentStaticText* itemStaticText4 = new CTransparentStaticText( itemDialog1, wxID_ANY, _("This dialog controls preferences for this computer only."), wxDefaultPosition, wxDefaultSize, 0 );
@@ -289,22 +275,17 @@ void CPanelPreferences::CreateControls()
 //    itemStaticText5->SetFont(wxFont(MEDIUM_FONT, wxSWISS, wxNORMAL, wxBOLD, false, _T("Arial")));
     itemFlexGridSizer3->Add(itemStaticText5, 0, wxALL, 0);
 
-    CTransparentStaticText* itemStaticText6 = new CTransparentStaticText( itemDialog1, wxID_ANY, _("Click Clear to restore web-based settings."), wxDefaultPosition, wxDefaultSize, 0 );
+    CTransparentStaticText* itemStaticText6 = new CTransparentStaticText( itemDialog1, wxID_ANY, _("Click Clear to restore web-based settings for all preferences listed below."), wxDefaultPosition, wxDefaultSize, 0 );
     
 //    itemStaticText6->SetFont(wxFont(MEDIUM_FONT, wxSWISS, wxNORMAL, wxBOLD, false, _T("Arial")));
     itemFlexGridSizer3->Add(itemStaticText6, 0, wxALL, 0);
 
     itemFlexGridSizer3->AddSpacer(10);
     
-    CTransparentStaticText* itemStaticText7 = new CTransparentStaticText( itemDialog1, wxID_ANY, _("For additional settings, select Computing Preferences in "), wxDefaultPosition, wxDefaultSize, 0 );
+    CTransparentStaticText* itemStaticText7 = new CTransparentStaticText( itemDialog1, wxID_ANY, _("For additional settings, select Computing Preferences in the Advanced View."), wxDefaultPosition, wxDefaultSize, 0 );
     
 //    itemStaticText7->SetFont(wxFont(MEDIUM_FONT, wxSWISS, wxNORMAL, wxBOLD, false, _T("Arial")));
     itemFlexGridSizer3->Add(itemStaticText7, 0, wxALL, 0);
-
-    CTransparentStaticText* itemStaticText8 = new CTransparentStaticText( itemDialog1, wxID_ANY, _("the Advanced View."), wxDefaultPosition, wxDefaultSize, 0 );
-    
-//    itemStaticText8->SetFont(wxFont(MEDIUM_FONT, wxSWISS, wxNORMAL, wxBOLD, false, _T("Arial")));
-    itemFlexGridSizer3->Add(itemStaticText8, 0, wxALL, 0);
 
     CTransparentStaticLine* itemStaticLine8 = new CTransparentStaticLine( itemDialog1, wxID_ANY, wxDefaultPosition, wxSize(300, 1), wxLI_HORIZONTAL|wxNO_BORDER );
     itemStaticLine8->SetLineColor(pSkinSimple->GetStaticLineColor());
@@ -445,7 +426,7 @@ void CPanelPreferences::CreateControls()
     itemBoxSizer44->Add(itemButton44, 0, wxALIGN_CENTER_VERTICAL|wxALL, 5);
 
     m_btnClear = new wxButton( this, ID_SGPREFERENCESCLEAR, _("Clear"), wxDefaultPosition, wxDefaultSize, 0 );
-    m_btnClear->SetToolTip( _("clear all local preferences and close the dialog") );
+    m_btnClear->SetToolTip( _("Clear all local preferences listed above and close the dialog") );
 
     itemBoxSizer44->Add(m_btnClear, 0, wxALIGN_CENTER_VERTICAL|wxALL, 5);
     
@@ -649,6 +630,23 @@ bool CPanelPreferences::ReadPreferenceSettings() {
     double         dTempValue2 = 0.0;
     int            retval;
     unsigned int   i;
+
+    // We localize these because some languages (e.g., French) use
+    // different abbreviations for MB and GB.
+    // Note: _() cannot be used for static or global strings.
+    wxString astrDiskUsageStrings[] = {
+        _("100 MB"),
+        _("200 MB"),
+        _("500 MB"),
+        _("1 GB"),
+        _("2 GB"),
+        _("5 GB"),
+        _("10 GB"),
+        _("20 GB"),
+        _("50 GB"),
+        _("100 GB")
+    };
+    int iDiskUsageArraySize = 10;
 
     wxASSERT(pDoc);
     wxASSERT(wxDynamicCast(pDoc, CMainDocument));
@@ -945,15 +943,12 @@ bool CDlgPreferences::Create( wxWindow* parent, wxWindowID id, const wxString& c
     // Initialize Application Title
     wxString strCaption = caption;
     if (strCaption.IsEmpty()) {
-        strCaption.Printf(_("%s - Preferences"), pSkinAdvanced->GetApplicationShortName().c_str());
+        strCaption.Printf(_("%s - Computing Preferences"), pSkinAdvanced->GetApplicationShortName().c_str());
     }
     SetTitle(strCaption);
 
     // Initialize Application Icon
-    wxIconBundle icons;
-    icons.AddIcon(*pSkinAdvanced->GetApplicationIcon());
-    icons.AddIcon(*pSkinAdvanced->GetApplicationIcon32());
-    SetIcons(icons);
+    SetIcons(*pSkinAdvanced->GetApplicationIcon());
 
     Freeze();
 

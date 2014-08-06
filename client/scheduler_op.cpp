@@ -128,7 +128,7 @@ int SCHEDULER_OP::init_op_project(PROJECT* p, int r) {
         // Now's a good time to check for new BOINC versions
         // and project list
         //
-        if (!config.no_info_fetch) {
+        if (!cc_config.no_info_fetch) {
             gstate.new_version_check();
             gstate.all_projects_list_check();
         }
@@ -216,7 +216,7 @@ static void request_string(char* buf) {
     for (int i=0; i<coprocs.n_rsc; i++) {
         if (rsc_work_fetch[i].req_secs) {
             if (!first) strcat(buf, " and ");
-            strcat(buf, rsc_name(i));
+            strcat(buf, rsc_name_long(i));
             first = false;
         }
     }
@@ -228,7 +228,7 @@ static void request_string(char* buf) {
 //
 int SCHEDULER_OP::start_rpc(PROJECT* p) {
     int retval;
-    char request_file[1024], reply_file[1024], buf[256];
+    char request_file[1024], reply_file[1024], buf[1024];
 
     safe_strcpy(scheduler_url, p->get_scheduler_url(url_index, url_random));
     if (log_flags.sched_ops) {
@@ -249,8 +249,7 @@ int SCHEDULER_OP::start_rpc(PROJECT* p) {
         } else {
             if (p->pwf.cant_fetch_work_reason) {
                 msg_printf(p, MSG_INFO,
-                    "Not requesting tasks: %s",
-                    cant_fetch_work_string(p->pwf.cant_fetch_work_reason)
+                    "Not requesting tasks: %s", cant_fetch_work_string(p, buf)
                 );
             } else {
                 msg_printf(p, MSG_INFO, "Not requesting tasks");
@@ -261,7 +260,7 @@ int SCHEDULER_OP::start_rpc(PROJECT* p) {
         for (int i=0; i<coprocs.n_rsc; i++) {
             msg_printf(p, MSG_INFO,
                 "[sched_op] %s work request: %.2f seconds; %.2f devices",
-                rsc_name(i),
+                rsc_name_long(i),
                 rsc_work_fetch[i].req_secs,
                 rsc_work_fetch[i].req_instances
             );
@@ -585,12 +584,18 @@ int SCHEDULER_REPLY::parse(FILE* in, PROJECT* project) {
     double cpid_time = 0;
 
     clear();
-    strcpy(host_venue, project->host_venue);
+    safe_strcpy(host_venue, project->host_venue);
         // the project won't send us a venue if it's doing maintenance
         // or doesn't check the DB because no work.
         // Don't overwrite the host venue in that case.
     sr_feeds.clear();
     trickle_up_urls.clear();
+
+    if (!project->anonymous_platform) {
+        for (int i=0; i<MAX_RSC; i++) {
+            project->no_rsc_apps[i] = false;
+        }
+    }
 
     // First line should either be tag (HTTP 1.0) or
     // hex length of response (HTTP 1.1)
@@ -625,6 +630,9 @@ int SCHEDULER_REPLY::parse(FILE* in, PROJECT* project) {
                 project->cpid_time = cpid_time;
             } else {
                 project->cpid_time = project->user_create_time;
+            }
+            if (project->dont_use_dcf) {
+                project->duration_correction_factor = 1;
             }
             return 0;
         }

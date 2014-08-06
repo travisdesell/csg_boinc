@@ -16,14 +16,16 @@
 // along with BOINC.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "boinc_win.h"
+
 #include "diagnostics.h"
 #include "error_numbers.h"
+#include "filesys.h"
+#include "network.h"
+#include "prefs.h"
+#include "str_replace.h"
 #include "url.h"
 #include "util.h"
 #include "win_util.h"
-#include "prefs.h"
-#include "filesys.h"
-#include "network.h"
 
 #include "client_state.h"
 #include "log_flags.h"
@@ -41,6 +43,46 @@ static HANDLE g_hWindowsMonitorSystemPowerThread = NULL;
 static HWND g_hWndWindowsMonitorSystemPower = NULL;
 static HANDLE g_hWindowsMonitorSystemProxyThread = NULL;
 
+
+// return true if running under remote desktop
+// (in which case CUDA and Stream apps don't work)
+//
+bool is_remote_desktop() {
+    LPTSTR pBuf = NULL;
+    DWORD dwLength;
+    USHORT usProtocol=0, usConnectionState=0;
+
+    if (WTSQuerySessionInformation(
+        WTS_CURRENT_SERVER_HANDLE,
+        WTS_CURRENT_SESSION,
+        WTSClientProtocolType,
+        &pBuf,
+        &dwLength
+    )) {
+        usProtocol = *(USHORT*)pBuf;
+        WTSFreeMemory(pBuf);
+    }
+
+    if (WTSQuerySessionInformation(
+        WTS_CURRENT_SERVER_HANDLE,
+        WTS_CURRENT_SESSION,
+        WTSConnectState,
+        &pBuf,
+        &dwLength
+    )) {
+        usConnectionState = *(USHORT*)pBuf;
+        WTSFreeMemory(pBuf);
+    }
+
+    // RDP Session implies Remote Desktop
+    if (usProtocol == 2) return true;
+
+    // Fast User Switching keeps the protocol set to the console but changes
+    // the connected state to disconnected.
+    if ((usProtocol == 0) && (usConnectionState == 4)) return true;
+
+    return false;
+}
 
 // The following 3 functions are called in a separate thread,
 // so we can't do anything directly.
@@ -96,7 +138,7 @@ static BOOL WINAPI console_control_handler( DWORD dwCtrlType ){
 
 static void post_sysmon_msg(const char* msg) {
     if (gstate.have_sysmon_msg) return;
-    strcpy(gstate.sysmon_msg, msg);
+    safe_strcpy(gstate.sysmon_msg, msg);
     gstate.have_sysmon_msg = true;
 }
 
@@ -185,6 +227,10 @@ static DWORD WINAPI WindowsMonitorSystemPowerThread( LPVOID  ) {
     WNDCLASS wc;
     MSG msg;
 
+    // Initialize diagnostics framework for this thread
+    //
+    diagnostics_thread_init();
+
     wc.style         = CS_GLOBALCLASS;
     wc.lpfnWndProc   = (WNDPROC)WindowsMonitorSystemPowerWndProc;
     wc.cbClsExtra    = 0;
@@ -232,26 +278,6 @@ static void windows_detect_autoproxy_settings() {
         post_sysmon_msg("[proxy] automatic proxy check in progress");
     }
 
-    HMODULE hModWinHttp = LoadLibrary("winhttp.dll");
-    if (!hModWinHttp) {
-        return;
-    }
-    pfnWinHttpOpen pWinHttpOpen =
-        (pfnWinHttpOpen)GetProcAddress(hModWinHttp, "WinHttpOpen");
-    if (!pWinHttpOpen) {
-        return;
-    }
-    pfnWinHttpCloseHandle pWinHttpCloseHandle =
-        (pfnWinHttpCloseHandle)(GetProcAddress(hModWinHttp, "WinHttpCloseHandle"));
-    if (!pWinHttpCloseHandle) {
-        return;
-    }
-    pfnWinHttpGetProxyForUrl pWinHttpGetProxyForUrl =
-        (pfnWinHttpGetProxyForUrl)(GetProcAddress(hModWinHttp, "WinHttpGetProxyForUrl"));
-    if (!pWinHttpGetProxyForUrl) {
-        return;
-    }
-
     HINTERNET                 hWinHttp = NULL;
     WINHTTP_AUTOPROXY_OPTIONS autoproxy_options;
     WINHTTP_PROXY_INFO        proxy_info;
@@ -269,9 +295,9 @@ static void windows_detect_autoproxy_settings() {
         WINHTTP_AUTO_DETECT_TYPE_DHCP | WINHTTP_AUTO_DETECT_TYPE_DNS_A;
     autoproxy_options.fAutoLogonIfChallenged = TRUE;
 
-    network_test_url = A2W(config.network_test_url).c_str();
+    network_test_url = A2W(cc_config.network_test_url).c_str();
 
-    hWinHttp = pWinHttpOpen(
+    hWinHttp = WinHttpOpen(
         L"BOINC client",
         WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
         WINHTTP_NO_PROXY_NAME,
@@ -282,7 +308,7 @@ static void windows_detect_autoproxy_settings() {
     char msg[1024], buf[1024];
     strcpy(msg, "[proxy] ");
 
-    if (pWinHttpGetProxyForUrl(hWinHttp, network_test_url.c_str(), &autoproxy_options, &proxy_info)) {
+    if (WinHttpGetProxyForUrl(hWinHttp, network_test_url.c_str(), &autoproxy_options, &proxy_info)) {
 
         // Apparently there are some conditions where WinHttpGetProxyForUrl can return
         //   success but where proxy_info.lpszProxy is null.  Maybe related to UPNP?
@@ -326,7 +352,7 @@ static void windows_detect_autoproxy_settings() {
                     net_status.need_physical_connection = false;
 
                     working_proxy_info.autodetect_protocol = purl.protocol;
-                    strcpy(working_proxy_info.autodetect_server_name, purl.host);
+                    safe_strcpy(working_proxy_info.autodetect_server_name, purl.host);
                     working_proxy_info.autodetect_port = purl.port;
                 }
 
@@ -350,15 +376,18 @@ static void windows_detect_autoproxy_settings() {
             strcat(msg, "no automatic proxy detected");
         }
     }
-    if (hWinHttp) pWinHttpCloseHandle(hWinHttp);
-    FreeLibrary(hModWinHttp);
+    if (hWinHttp) WinHttpCloseHandle(hWinHttp);
     if (log_flags.proxy_debug) {
         post_sysmon_msg(msg);
     }
 }
 
 static DWORD WINAPI WindowsMonitorSystemProxyThread( LPVOID  ) {
-    
+
+    // Initialize diagnostics framework for this thread
+    //
+    diagnostics_thread_init();
+
     // notify the main client thread that detecting proxies is
     // supported.
     working_proxy_info.autodetect_proxy_supported = true;

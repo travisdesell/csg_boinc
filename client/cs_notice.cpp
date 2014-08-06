@@ -1,6 +1,6 @@
 // This file is part of BOINC.
 // http://boinc.berkeley.edu
-// Copyright (C) 2009 University of California
+// Copyright (C) 2014 University of California
 //
 // BOINC is free software; you can redistribute it and/or modify it
 // under the terms of the GNU Lesser General Public License
@@ -27,6 +27,7 @@
 #include "parse.h"
 #include "url.h"
 #include "filesys.h"
+#include "str_replace.h"
 
 #include "client_state.h"
 #include "client_msgs.h"
@@ -344,9 +345,12 @@ bool NOTICES::remove_dups(NOTICE& n) {
         ) {
             i = notices.erase(i);
             removed_something = true;
+#if 0
+        // this check prevents news item edits from showing; skip it
         } else if (same_guid(n, n2)) {
             n2.keep = true;
             return false;
+#endif
         } else if (same_text(n, n2)) {
             int min_diff = 0;
 
@@ -437,8 +441,8 @@ int NOTICES::read_archive_file(const char* path, RSS_FEED* rfp) {
                 }
             } else {
                 if (rfp) {
-                    strcpy(n.feed_url, rfp->url);
-                    strcpy(n.project_name, rfp->project_name);
+                    safe_strcpy(n.feed_url, rfp->url);
+                    safe_strcpy(n.project_name, rfp->project_name);
                 }
                 append(n);
             }
@@ -460,7 +464,7 @@ void NOTICES::write_archive(RSS_FEED* rfp) {
     if (rfp) {
         rfp->archive_file_name(path);
     } else {
-        strcpy(path, NOTICES_DIR"/archive.xml");
+        safe_strcpy(path, NOTICES_DIR"/archive.xml");
     }
     FILE* f = fopen(path, "w");
     if (!f) return;
@@ -481,19 +485,41 @@ void NOTICES::write_archive(RSS_FEED* rfp) {
     fclose(f);
 }
 
-// Remove "need network access" notices
+// Remove outdated notices
 //
-void NOTICES::remove_network_msg() {
+void NOTICES::remove_notices(PROJECT* p, int which) {
     deque<NOTICE>::iterator i = notices.begin();
     while (i != notices.end()) {
         NOTICE& n = *i;
-        if (!strcmp(n.description.c_str(), NEED_NETWORK_MSG)) {
+        if (p && strcmp(n.project_name, p->get_project_name())) {
+            ++i;
+            continue;
+        }
+        bool remove = false;
+        switch (which) {
+        case REMOVE_NETWORK_MSG:
+            remove = !strcmp(n.description.c_str(), NEED_NETWORK_MSG);
+            break;
+        case REMOVE_SCHEDULER_MSG:
+            remove = !strcmp(n.category, "scheduler");
+            break;
+        case REMOVE_NO_WORK_MSG:
+            remove = !strcmp(n.description.c_str(), NO_WORK_MSG);
+            break;
+        case REMOVE_CONFIG_MSG:
+            remove = (strstr(n.description.c_str(), "cc_config.xml") != NULL);
+            break;
+        case REMOVE_APP_INFO_MSG:
+            remove = (strstr(n.description.c_str(), "app_info.xml") != NULL);
+            break;
+        }
+        if (remove) {
             i = notices.erase(i);
 #ifndef SIM
             gstate.gui_rpcs.set_notice_refresh();
 #endif
             if (log_flags.notice_debug) {
-                msg_printf(0, MSG_INFO, "REMOVING NETWORK MESSAGE");
+                msg_printf(p, MSG_INFO, "Removing notices of type %d", which);
             }
         } else {
             ++i;
@@ -509,7 +535,7 @@ void NOTICES::write(int seqno, GUI_RPC_CONN& grc, bool public_only) {
     MIOFILE mf;
 
     if (!net_status.need_physical_connection) {
-        remove_network_msg();
+        remove_notices(NULL, REMOVE_NETWORK_MSG);
     }
     if (log_flags.notice_debug) {
         msg_printf(0, MSG_INFO, "NOTICES::write: seqno %d, refresh %s, %d notices",
@@ -584,7 +610,7 @@ int RSS_FEED::parse_desc(XML_PARSER& xp) {
                 }
                 return ERR_XML_PARSE;
             }
-            strcpy(url_base, url);
+            safe_strcpy(url_base, url);
             char* p = strchr(url_base, '?');
             if (p) *p = 0;
             return 0;
@@ -600,7 +626,7 @@ int RSS_FEED::parse_desc(XML_PARSER& xp) {
 
 void RSS_FEED::write(MIOFILE& fout) {
     char buf[256];
-    strcpy(buf, url);
+    safe_strcpy(buf, url);
     xml_escape(url, buf, sizeof(buf));
     fout.printf(
         "  <rss_feed>\n"
@@ -656,8 +682,8 @@ int RSS_FEED::parse_items(XML_PARSER& xp, int& nitems) {
             } else {
                 n.arrival_time = gstate.now;
                 n.keep = true;
-                strcpy(n.feed_url, url);
-                strcpy(n.project_name, project_name);
+                safe_strcpy(n.feed_url, url);
+                safe_strcpy(n.project_name, project_name);
                 new_notices.push_back(n);
             }
             continue;
@@ -687,6 +713,14 @@ int RSS_FEED::parse_items(XML_PARSER& xp, int& nitems) {
     return func_ret;
 }
 
+void RSS_FEED::delete_files() {
+    char path[MAXPATHLEN];
+    feed_file_name(path);
+    boinc_delete_file(path);
+    archive_file_name(path);
+    boinc_delete_file(path);
+}
+
 ///////////// RSS_FEED_OP ////////////////
 
 RSS_FEED_OP::RSS_FEED_OP() {
@@ -712,7 +746,7 @@ bool RSS_FEED_OP::poll() {
                     "[notice] start fetch from %s", rf.url
                 );
             }
-            char url[256];
+            char url[1024];
             strcpy(url, rf.url);
             gstate.gui_http.do_rpc(this, url, filename, true);
             break;
@@ -847,7 +881,7 @@ void RSS_FEEDS::update_proj_am(PROJ_AM* p) {
             rfp->found = true;
         } else {
             rf.found = true;
-            strcpy(rf.project_name, p->get_project_name());
+            safe_strcpy(rf.project_name, p->get_project_name());
             feeds.push_back(rf);
             if (log_flags.notice_debug) {
                 msg_printf(0, MSG_INFO,
@@ -897,6 +931,7 @@ void RSS_FEEDS::update_feed_list() {
                     rf.url
                 );
             }
+            rf.delete_files();
             iter = feeds.erase(iter);
         }
     }
@@ -910,4 +945,10 @@ void RSS_FEEDS::write_feed_list() {
     fout.init_file(f);
     write_rss_feed_descs(fout, feeds);
     fclose(f);
+}
+
+void delete_project_notice_files(PROJECT* p) {
+    char path[MAXPATHLEN];
+    project_feed_list_file_name(p, path);
+    boinc_delete_file(path);
 }

@@ -37,13 +37,14 @@
 #include <sys/time.h>
 #include <sys/param.h>
 
-#include "boinc_db.h"
-#include "util.h"
 #include "backend_lib.h"
+#include "boinc_db.h"
 #include "common_defs.h"
 #include "error_numbers.h"
+#include "filesys.h"
 #include "str_util.h"
 #include "svn_version.h"
+#include "util.h"
 
 #include "sched_config.h"
 #include "credit.h"
@@ -93,7 +94,7 @@ static int result_timed_out(
         log_messages.printf(MSG_NORMAL,
             "result_timed_out(): hav_lookup failed: %s\n", boincerror(retval)
         );
-        return retval;
+        return 0;
     }
     hav.turnaround.update_var(
         (double)wu_item.delay_bound,
@@ -189,7 +190,7 @@ int handle_wu(
 
     if (wu_item.canonical_resultid && (canonical_result_index == -1)) {
         log_messages.printf(MSG_CRITICAL,
-            "[WU#%d %s] can't find canonical result\n",
+            "[WU#%u %s] can't find canonical result\n",
             wu_item.id, wu_item.name
         );
     }
@@ -228,7 +229,7 @@ int handle_wu(
         case RESULT_SERVER_STATE_IN_PROGRESS:
             if (res_item.res_report_deadline < now) {
                 log_messages.printf(MSG_NORMAL,
-                    "[WU#%d %s] [RESULT#%d %s] result timed out (%d < %d) server_state:IN_PROGRESS=>OVER; outcome:NO_REPLY\n",
+                    "[WU#%u %s] [RESULT#%u %s] result timed out (%d < %d) server_state:IN_PROGRESS=>OVER; outcome:NO_REPLY\n",
                     wu_item.id, wu_item.name, res_item.res_id,
                     res_item.res_name,
                     res_item.res_report_deadline, (int)now
@@ -238,7 +239,7 @@ int handle_wu(
                 retval = transitioner.update_result(res_item);
                 if (retval) {
                     log_messages.printf(MSG_CRITICAL,
-                        "[WU#%d %s] [RESULT#%d %s] update_result(): %s\n",
+                        "[WU#%u %s] [RESULT#%u %s] update_result(): %s\n",
                         wu_item.id, wu_item.name, res_item.res_id,
                         res_item.res_name, boincerror(retval)
                     );
@@ -261,7 +262,7 @@ int handle_wu(
             switch (res_item.res_outcome) {
             case RESULT_OUTCOME_COULDNT_SEND:
                 log_messages.printf(MSG_NORMAL,
-                    "[WU#%d %s] [RESULT#%d %s] result couldn't be sent\n",
+                    "[WU#%u %s] [RESULT#%u %s] result couldn't be sent\n",
                     wu_item.id, wu_item.name, res_item.res_id, res_item.res_name
                 );
                 ncouldnt_send++;
@@ -273,13 +274,13 @@ int handle_wu(
                         retval = transitioner.update_result(res_item);
                         if (retval) {
                             log_messages.printf(MSG_CRITICAL,
-                                "[WU#%d %s] [RESULT#%d %s] update_result(): %s\n",
+                                "[WU#%u %s] [RESULT#%u %s] update_result(): %s\n",
                                 wu_item.id, wu_item.name, res_item.res_id,
                                 res_item.res_name, boincerror(retval)
                             );
                         } else {
                             log_messages.printf(MSG_NORMAL,
-                                "[WU#%d %s] [RESULT#%d %s] validate_state:INIT=>TOO_LATE\n",
+                                "[WU#%u %s] [RESULT#%u %s] validate_state:INIT=>TOO_LATE\n",
                                 wu_item.id, wu_item.name, res_item.res_id,
                                 res_item.res_name
                             );
@@ -295,6 +296,14 @@ int handle_wu(
                 }
                 break;
             case RESULT_OUTCOME_CLIENT_ERROR:
+                // is user aborted job, don't count it as an error
+                //
+                if (res_item.res_exit_status == EXIT_ABORTED_VIA_GUI) {
+                    nno_reply++;
+                } else {
+                    nerrors++;
+                }
+                break;
             case RESULT_OUTCOME_VALIDATE_ERROR:
                 nerrors++;
                 break;
@@ -311,7 +320,7 @@ int handle_wu(
     }
 
     log_messages.printf(MSG_DEBUG,
-        "[WU#%d %s] %d results: unsent %d, in_progress %d, over %d (success %d, error %d, couldnt_send %d, no_reply %d, didnt_need %d)\n",
+        "[WU#%u %s] %d results: unsent %d, in_progress %d, over %d (success %d, error %d, couldnt_send %d, no_reply %d, didnt_need %d)\n",
         wu_item.id, wu_item.name, ntotal, nunsent, ninprogress, nover,
         nsuccess, nerrors, ncouldnt_send, nno_reply, ndidnt_need
     );
@@ -321,7 +330,7 @@ int handle_wu(
     if (have_new_result_to_validate && (nsuccess >= wu_item.min_quorum)) {
         wu_item.need_validate = true;
         log_messages.printf(MSG_NORMAL,
-            "[WU#%d %s] need_validate:=>true\n", wu_item.id, wu_item.name
+            "[WU#%u %s] need_validate:=>true\n", wu_item.id, wu_item.name
         );
     }
 
@@ -346,7 +355,7 @@ int handle_wu(
 
     if (nerrors > wu_item.max_error_results) {
         log_messages.printf(MSG_NORMAL,
-            "[WU#%d %s] WU has too many errors (%d errors for %d results)\n",
+            "[WU#%u %s] WU has too many errors (%d errors for %d results)\n",
             wu_item.id, wu_item.name, nerrors, ntotal
         );
         wu_item.error_mask |= WU_ERROR_TOO_MANY_ERROR_RESULTS;
@@ -374,7 +383,7 @@ int handle_wu(
     }
     if (too_many) {
         log_messages.printf(MSG_NORMAL,
-            "[WU#%d %s] WU has too many total results (%d)\n",
+            "[WU#%u %s] WU has too many total results (%d)\n",
             wu_item.id, wu_item.name, ntotal
         );
         wu_item.error_mask |= WU_ERROR_TOO_MANY_TOTAL_RESULTS;
@@ -392,7 +401,7 @@ int handle_wu(
             case RESULT_SERVER_STATE_INACTIVE:
             case RESULT_SERVER_STATE_UNSENT:
                 log_messages.printf(MSG_NORMAL,
-                    "[WU#%d %s] [RESULT#%d %s] server_state:UNSENT=>OVER; outcome:=>DIDNT_NEED\n",
+                    "[WU#%u %s] [RESULT#%u %s] server_state:UNSENT=>OVER; outcome:=>DIDNT_NEED\n",
                     wu_item.id, wu_item.name, res_item.res_id, res_item.res_name
                 );
                 res_item.res_server_state = RESULT_SERVER_STATE_OVER;
@@ -415,7 +424,7 @@ int handle_wu(
                 retval = transitioner.update_result(res_item);
                 if (retval) {
                     log_messages.printf(MSG_CRITICAL,
-                        "[WU#%d %s] [RESULT#%d %s] result.update(): %s\n",
+                        "[WU#%u %s] [RESULT#%u %s] result.update(): %s\n",
                         wu_item.id, wu_item.name, res_item.res_id,
                         res_item.res_name, boincerror(retval)
                     );
@@ -425,7 +434,7 @@ int handle_wu(
         if (wu_item.assimilate_state == ASSIMILATE_INIT) {
             wu_item.assimilate_state = ASSIMILATE_READY;
             log_messages.printf(MSG_NORMAL,
-                "[WU#%d %s] error_mask:%d assimilate_state:INIT=>READY\n",
+                "[WU#%u %s] error_mask:%d assimilate_state:INIT=>READY\n",
                 wu_item.id, wu_item.name, wu_item.error_mask
             );
         }
@@ -440,7 +449,7 @@ int handle_wu(
         ) {
             log_messages.printf(
                 MSG_NORMAL,
-                "[WU#%d %s] Generating %d more results (%d target - %d unsent - %d in progress - %d success)\n",
+                "[WU#%u %s] Generating %d more results (%d target - %d unsent - %d in progress - %d success)\n",
                 wu_item.id, wu_item.name, n_new_results_needed,
                 wu_item.target_nresults, nunsent, ninprogress, nsuccess
             );
@@ -458,7 +467,7 @@ int handle_wu(
                 );
                 if (retval) {
                     log_messages.printf(MSG_CRITICAL,
-                        "[WU#%d %s] create_result_ti(): %s\n",
+                        "[WU#%u %s] create_result_ti(): %s\n",
                         wu_item.id, wu_item.name, boincerror(retval)
                     );
                     return retval;
@@ -474,7 +483,7 @@ int handle_wu(
             retval = r.insert_batch(values);
             if (retval) {
                 log_messages.printf(MSG_CRITICAL,
-                    "[WU#%d %s] insert_batch(): %s\n",
+                    "[WU#%u %s] insert_batch(): %s\n",
                     wu_item.id, wu_item.name, boincerror(retval)
                 );
                 return retval;
@@ -523,7 +532,7 @@ int handle_wu(
     ) {
         wu_item.assimilate_state = ASSIMILATE_READY;
         log_messages.printf(MSG_NORMAL,
-            "[WU#%d %s] Deferred assimilation now set to ASSIMILATE_STATE_READY\n",
+            "[WU#%u %s] Deferred assimilation now set to ASSIMILATE_STATE_READY\n",
             wu_item.id, wu_item.name
         );
     }
@@ -538,7 +547,7 @@ int handle_wu(
             if (all_over_and_validated && wu_item.file_delete_state == FILE_DELETE_INIT) {
                 wu_item.file_delete_state = FILE_DELETE_READY;
                 log_messages.printf(MSG_DEBUG,
-                    "[WU#%d %s] ASSIMILATE_DONE: file_delete_state:=>READY\n",
+                    "[WU#%u %s] ASSIMILATE_DONE: file_delete_state:=>READY\n",
                     wu_item.id, wu_item.name
                 );
             }
@@ -568,7 +577,7 @@ int handle_wu(
                 }
                 if (do_delete && res_item.res_file_delete_state == FILE_DELETE_INIT) {
                     log_messages.printf(MSG_NORMAL,
-                        "[WU#%d %s] [RESULT#%d %s] file_delete_state:=>READY\n",
+                        "[WU#%u %s] [RESULT#%u %s] file_delete_state:=>READY\n",
                         wu_item.id, wu_item.name, res_item.res_id, res_item.res_name
                     );
                     res_item.res_file_delete_state = FILE_DELETE_READY;
@@ -576,7 +585,7 @@ int handle_wu(
                     retval = transitioner.update_result(res_item);
                     if (retval) {
                         log_messages.printf(MSG_CRITICAL,
-                            "[WU#%d %s] [RESULT#%d %s] result.update(): %s\n",
+                            "[WU#%u %s] [RESULT#%u %s] result.update(): %s\n",
                             wu_item.id, wu_item.name, res_item.res_id,
                             res_item.res_name, boincerror(retval)
                         );
@@ -586,7 +595,7 @@ int handle_wu(
         } else {
             deferred_file_delete_time = most_recently_returned + config.delete_delay;
             log_messages.printf(MSG_DEBUG,
-                "[WU#%d %s] deferring file deletion for %.0f seconds\n",
+                "[WU#%u %s] deferring file deletion for %.0f seconds\n",
                 wu_item.id,
                 wu_item.name,
                 deferred_file_delete_time - now
@@ -648,21 +657,21 @@ int handle_wu(
         if (extra_delay < 60) extra_delay = 60;
         if (extra_delay > 86400) extra_delay = 86400;
         log_messages.printf(MSG_DEBUG,
-            "[WU#%d %s] transition time in past: adding extra delay %d sec\n",
+            "[WU#%u %s] transition time in past: adding extra delay %d sec\n",
             wu_item.id, wu_item.name, extra_delay
         );
         wu_item.transition_time = now + extra_delay;
     }
 
     log_messages.printf(MSG_DEBUG,
-        "[WU#%d %s] setting transition_time to %d\n",
+        "[WU#%u %s] setting transition_time to %d\n",
         wu_item.id, wu_item.name, wu_item.transition_time
     );
 
     retval = transitioner.update_workunit(wu_item, wu_item_original);
     if (retval) {
         log_messages.printf(MSG_CRITICAL,
-            "[WU#%d %s] workunit.update(): %s\n",
+            "[WU#%u %s] workunit.update(): %s\n",
             wu_item.id, wu_item.name, boincerror(retval)
         );
         return retval;
@@ -698,7 +707,7 @@ bool do_pass() {
         retval = handle_wu(transitioner, items);
         if (retval) {
             log_messages.printf(MSG_CRITICAL,
-                "[WU#%d %s] handle_wu: %s; quitting\n",
+                "[WU#%u %s] handle_wu: %s; quitting\n",
                 wu_item.id, wu_item.name, boincerror(retval)
             );
             exit(1);

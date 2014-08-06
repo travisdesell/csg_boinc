@@ -52,6 +52,7 @@ CDlgItemProperties::CDlgItemProperties(wxWindow* parent) :
     m_bSizer2 = new wxBoxSizer( wxVERTICAL );
     
     m_gbSizer = new wxGridBagSizer( 0, 0 );
+    m_gbSizer->SetCols(2);
     m_gbSizer->AddGrowableCol( 1 );
     m_gbSizer->SetFlexibleDirection( wxBOTH );
     m_gbSizer->SetNonFlexibleGrowMode( wxFLEX_GROWMODE_SPECIFIED );
@@ -127,6 +128,10 @@ bool CDlgItemProperties::RestoreState() {
 
     pConfig->Read(wxT("Width"), &iWidth, wxDefaultCoord);
     pConfig->Read(wxT("Height"), &iHeight, wxDefaultCoord);
+
+    // Guard against a rare situation where registry values are zero
+    if ((iWidth < 50) && (iWidth != wxDefaultCoord)) iWidth = wxDefaultCoord;
+    if ((iHeight < 50) && (iHeight != wxDefaultCoord)) iHeight = wxDefaultCoord;
 
 #ifndef __WXMAC__
     // Set size to saved values or defaults if no saved values
@@ -251,6 +256,9 @@ void CDlgItemProperties::renderInfos(PROJECT* project_in) {
     if (project->ended) {
         addProperty(_("Ended"), _("yes"));
     }
+    addProperty(_("Tasks completed"), wxString::Format(wxT("%d"), project->njobs_success));
+    addProperty(_("Tasks failed"), wxString::Format(wxT("%d"), project->njobs_error));
+
     addSection(_("Credit"));
     addProperty(_("User"),
         wxString::Format(
@@ -321,7 +329,7 @@ void CDlgItemProperties::renderInfos(RESULT* result) {
     }
     
     addProperty(_("Application"), FormatApplicationName(result));
-    addProperty(_("Workunit name"), wxString(result->wu_name, wxConvUTF8));
+    addProperty(_("Name"), wxString(result->wu_name, wxConvUTF8));
     addProperty(_("State"), result_description(result, false));
     if (result->received_time) {
         dt.Set((time_t)result->received_time);
@@ -361,20 +369,16 @@ void CDlgItemProperties::renderInfos(RESULT* result) {
 
 //
 wxString CDlgItemProperties::FormatDiskSpace(double bytes) {    
-    double         xTera = 1099511627776.0;
-    double         xGiga = 1073741824.0;
-    double         xMega = 1048576.0;
-    double         xKilo = 1024.0;
     wxString strBuffer= wxEmptyString;
 
-    if (bytes >= xTera) {
-        strBuffer.Printf(wxT("%0.2f TB"), bytes/xTera);
-    } else if (bytes >= xGiga) {
-        strBuffer.Printf(wxT("%0.2f GB"), bytes/xGiga);
-    } else if (bytes >= xMega) {
-        strBuffer.Printf(wxT("%0.2f MB"), bytes/xMega);
-    } else if (bytes >= xKilo) {
-        strBuffer.Printf(wxT("%0.2f KB"), bytes/xKilo);
+    if (bytes >= TERA) {
+        strBuffer.Printf(wxT("%0.2f TB"), bytes/TERA);
+    } else if (bytes >= GIGA) {
+        strBuffer.Printf(wxT("%0.2f GB"), bytes/GIGA);
+    } else if (bytes >= MEGA) {
+        strBuffer.Printf(wxT("%0.2f MB"), bytes/MEGA);
+    } else if (bytes >= KILO) {
+        strBuffer.Printf(wxT("%0.2f KB"), bytes/KILO);
     } else {
         strBuffer.Printf(wxT("%0.0f bytes"), bytes);
     }

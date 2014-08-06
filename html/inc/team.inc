@@ -88,6 +88,10 @@ function display_team_page($team, $user) {
     if (strlen($team->description)) {
         row2(tra('Description'), sanitize_html($team->description));
     }
+    row2("Created", date_str($team->create_time));
+    if (defined("SHOW_NONVALIDATED_TEAMS")) {
+        row2("Founder email validated", $user->email_validated?"Yes":"No (team will not be exported)");
+    }
     if (strlen($team->url)) {;
         if (strstr($team->url, "http://")) {
             $x = $team->url;
@@ -100,6 +104,7 @@ function display_team_page($team, $user) {
     if (!no_computing()) {
         row2(tra('Total credit'), format_credit_large($team->total_credit));
         row2(tra('Recent average credit'), format_credit_large($team->expavg_credit));
+        show_badges(false, $team);
 
         $x = "";
         shuffle($team_name_sites);
@@ -417,12 +422,10 @@ function team_edit_form($team, $label, $url) {
     echo "<form method=post action=$url>\n";
     if ($team) {
         echo "<input type=hidden name=teamid value=$team->id>\n";
-    }
-    if ($team->seti_id) {
-        echo "<p><span class=error>".tra("WARNING: this is a BOINC-wide team. If you make changes here, they will soon be overwritten. Edit the %1BOINC-wide team%2 instead.", "<a href=http://boinc.berkeley.edu/teams/>", "</a>")
-        ."</span>
-            <p>
-        ";
+        if ($team->seti_id) {
+            echo "<p><span class=error>".tra("WARNING: this is a BOINC-wide team. If you make changes here, they will soon be overwritten. Edit the %1BOINC-wide team%2 instead.", "<a href=http://boinc.berkeley.edu/teams/>", "</a>")
+            ."</span><p>";
+        }
     }
     echo '
         <p>
@@ -432,34 +435,34 @@ function team_edit_form($team, $label, $url) {
     start_table();
     row2(tra('Team name, text version').'
         <br><span class="note">'.tra('Don\'t use HTML tags.').'</span>',
-        "<input name=name type=text size=50 value='$team->name'>"
+        "<input name=name type=text size=50 value='".($team?$team->name:"")."'>"
     );
     row2(tra('Team name, HTML version').'
         <br><span class="note">
         '.tra('You may use %1limited HTML tags%2.', '<a href="html.php" target="_new">', '</a>').'
         '.tra('If you don\'t know HTML, leave this box blank.').'</span>',
-        "<input name=name_html type=text size=50 value=\"".str_replace('"',"'",$team->name_html)."\">"
+        "<input name=name_html type=text size=50 value=\"".str_replace('"',"'",($team?$team->name_html:""))."\">"
     );
     row2(tra('URL of team web page, if any').':<br><font size=-2>('.tra('without "http://"').')
         '.tra('This URL will be linked to from the team\'s page on this site.'),
-        "<input type=text name=url size=60 value='$team->url'>"
+        "<input type=text name=url size=60 value='".($team?$team->url:"")."'>"
     );
     row2(tra('Description of team').':
         <br><span class="note">
         '.tra('You may use %1limited HTML tags%2.', '<a href="html.php" target="_new">', '</a>').'
         </span>',
-        "<textarea name=description cols=60 rows=10>$team->description</textarea>"
+        "<textarea name=description cols=60 rows=10>".($team?$team->description:"")."</textarea>"
     );
 
-    row2(tra('Type of team').':', team_type_select($team->type));
+    row2(tra('Type of team').':', team_type_select($team?$team->type:null));
 
     row2_init(tra('Country'),
         "<select name=country>"
     );
-    print_country_select($team->country);
+    print_country_select($team?$team->country:null);
 
     echo "</select></td></tr>\n";
-    $x = $team->joinable?"checked":"";
+    $x = ($team && $team->joinable)?"checked":"";
     row2(tra("Accept new members?"), "<input type=checkbox name=joinable $x>");
     row2("",
         "<input type=submit name=new value='$label'>"

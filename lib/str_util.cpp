@@ -29,6 +29,7 @@
 #include <string>
 #include <cmath>
 #include <string.h>
+#include <time.h>
 #include <stdlib.h>
 #include <ctype.h>
 #endif
@@ -80,7 +81,7 @@ size_t strlcat(char *dst, const char *src, size_t size) {
 
 #if !HAVE_STRCASESTR
 // BOINC only uses strcasestr() for short strings,
-// so the following till suffice
+// so the following will suffice
 //
 const char *strcasestr(const char *s1, const char *s2) {
     char needle[1024], haystack[1024], *p=NULL;
@@ -330,9 +331,13 @@ void strip_whitespace(string& str) {
 
 char* time_to_string(double t) {
     static char buf[100];
-    time_t x = (time_t)t;
-    struct tm* tm = localtime(&x);
-    strftime(buf, sizeof(buf)-1, "%d-%b-%Y %H:%M:%S", tm);
+    if (!t) {
+        strcpy(buf, "---");
+    } else {
+        time_t x = (time_t)t;
+        struct tm* tm = localtime(&x);
+        strftime(buf, sizeof(buf)-1, "%d-%b-%Y %H:%M:%S", tm);
+    }
     return buf;
 }
 
@@ -427,6 +432,7 @@ const char* boincerror(int which_error) {
         case ERR_NO_SIGNATURE: return "no signature";
         case ERR_THREAD: return "thread failure";
         case ERR_SIGNAL_CATCH: return "caught signal";
+        case ERR_BAD_FORMAT: return "bad file format";
         case ERR_UPLOAD_TRANSIENT: return "transient upload error";
         case ERR_UPLOAD_PERMANENT: return "permanent upload error";
         case ERR_IDLE_PERIOD: return "user preferences say can't start work";
@@ -461,6 +467,7 @@ const char* boincerror(int which_error) {
         case ERR_NOT_FOUND: return "not found";
         case ERR_NO_EXIT_STATUS: return "no exit status in scheduler request";
         case ERR_FILE_MISSING: return "file missing";
+        case ERR_KILL: return "kill() or TerminateProcess() failed";
         case ERR_SEMGET: return "semget() failed";
         case ERR_SEMCTL: return "semctl() failed";
         case ERR_SEMOP: return "semop() failed";
@@ -521,6 +528,7 @@ const char* boincerror(int which_error) {
         case ERR_CRYPTO: return "encryption error";
         case ERR_ABORTED_ON_EXIT: return "job was aborted on client exit";
         case ERR_PROC_PARSE: return "a /proc entry was not parsed correctly";
+        case ERR_PIPE: return "pipe() failed";
         case 404: return "HTTP file not found";
         case 407: return "HTTP proxy authentication failure";
         case 416: return "HTTP range request error";
@@ -570,11 +578,12 @@ const char* suspend_reason_string(int reason) {
     case SUSPEND_REASON_INITIAL_DELAY: return "initial delay";
     case SUSPEND_REASON_EXCLUSIVE_APP_RUNNING: return "an exclusive app is running";
     case SUSPEND_REASON_CPU_USAGE: return "CPU is busy";
-    case SUSPEND_REASON_NETWORK_QUOTA_EXCEEDED: return "network bandwidth limit exceeded";
+    case SUSPEND_REASON_NETWORK_QUOTA_EXCEEDED: return "network transfer limit exceeded";
     case SUSPEND_REASON_OS: return "requested by operating system";
     case SUSPEND_REASON_WIFI_STATE: return "not connected to WiFi network";
     case SUSPEND_REASON_BATTERY_CHARGING: return "battery low";
     case SUSPEND_REASON_BATTERY_OVERHEATED: return "battery thermal protection";
+    case SUSPEND_REASON_NO_GUI_KEEPALIVE: return "GUI not active";
     }
     return "unknown reason";
 }
@@ -584,6 +593,67 @@ const char* run_mode_string(int mode) {
     case RUN_MODE_ALWAYS: return "always";
     case RUN_MODE_AUTO: return "according to prefs";
     case RUN_MODE_NEVER: return "never";
+    }
+    return "unknown";
+}
+
+const char* battery_state_string(int state) {
+    switch (state) {
+    case BATTERY_STATE_DISCHARGING: return "discharging";
+    case BATTERY_STATE_CHARGING: return "charging";
+    case BATTERY_STATE_FULL: return "full";
+    case BATTERY_STATE_OVERHEATED: return "overheated";
+    }
+    return "unknown";
+}
+
+const char* result_client_state_string(int state) {
+    switch (state) {
+    case RESULT_NEW: return "new";
+    case RESULT_FILES_DOWNLOADING: return "downloading";
+    case RESULT_FILES_DOWNLOADED: return "downloaded";
+    case RESULT_COMPUTE_ERROR: return "compute error";
+    case RESULT_FILES_UPLOADING: return "uploading";
+    case RESULT_FILES_UPLOADED: return "uploaded";
+    case RESULT_ABORTED: return "aborted";
+    case RESULT_UPLOAD_FAILED: return "upload failed";
+    }
+    return "unknown";
+}
+
+const char* result_scheduler_state_string(int state) {
+    switch (state) {
+    case CPU_SCHED_UNINITIALIZED: return "uninitialized";
+    case CPU_SCHED_PREEMPTED: return "preempted";
+    case CPU_SCHED_SCHEDULED: return "scheduled";
+    }
+    return "unknown";
+}
+
+const char* active_task_state_string(int state) {
+    switch (state) {
+    case PROCESS_UNINITIALIZED: return "UNINITIALIZED";
+    case PROCESS_EXECUTING: return "EXECUTING";
+    case PROCESS_SUSPENDED: return "SUSPENDED";
+    case PROCESS_ABORT_PENDING: return "ABORT_PENDING";
+    case PROCESS_EXITED: return "EXITED";
+    case PROCESS_WAS_SIGNALED: return "WAS_SIGNALED";
+    case PROCESS_EXIT_UNKNOWN: return "EXIT_UNKNOWN";
+    case PROCESS_ABORTED: return "ABORTED";
+    case PROCESS_COULDNT_START: return "COULDNT_START";
+    case PROCESS_QUIT_PENDING: return "QUIT_PENDING";
+    case PROCESS_COPY_PENDING: return "COPY_PENDING";
+    }
+    return "Unknown";
+}
+
+const char* batch_state_string(int state) {
+    switch (state) {
+    case BATCH_STATE_INIT: return "uninitialized";
+    case BATCH_STATE_IN_PROGRESS: return "in progress";
+    case BATCH_STATE_COMPLETE: return "completed";
+    case BATCH_STATE_ABORTED: return "aborted";
+    case BATCH_STATE_RETIRED: return "retired";
     }
     return "unknown";
 }
@@ -630,9 +700,20 @@ inline void remove_str(char* p, const char* str) {
     }
 }
 
-// remove _( and ") from string
+// remove _(" and ") from string
 //
 void strip_translation(char* p) {
     remove_str(p, "_(\"");
     remove_str(p, "\")");
+}
+
+char* lf_terminate(char* p) {
+    int n = (int)strlen(p);
+    if (p[n-1] == '\n') {
+        return p;
+    }
+    p = (char*)realloc(p, n+2);
+    p[n] = '\n';
+    p[n+1] = 0;
+    return p;
 }

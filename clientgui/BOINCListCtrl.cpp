@@ -25,13 +25,27 @@
 #include "Events.h"
 
 
+DEFINE_EVENT_TYPE(wxEVT_CHECK_SELECTION_CHANGED)
+
 #if USE_NATIVE_LISTCONTROL
 DEFINE_EVENT_TYPE(wxEVT_DRAW_PROGRESSBAR)
+#endif
 
 BEGIN_EVENT_TABLE(CBOINCListCtrl, LISTCTRL_BASE)
+
+#if USE_NATIVE_LISTCONTROL
     EVT_DRAW_PROGRESSBAR(CBOINCListCtrl::OnDrawProgressBar)
-END_EVENT_TABLE()
+#else
+#ifdef __WXMAC__
+	EVT_SIZE(CBOINCListCtrl::OnSize)    // In MacAccessibility.mm
 #endif
+#endif
+
+#if ! USE_LIST_CACHE_HINT
+    EVT_LEFT_DOWN(CBOINCListCtrl::OnMouseDown)
+#endif
+END_EVENT_TABLE()
+
 
 BEGIN_EVENT_TABLE(MyEvtHandler, wxEvtHandler)
     EVT_PAINT(MyEvtHandler::OnPaint)
@@ -51,8 +65,9 @@ CBOINCListCtrl::CBOINCListCtrl(
 ) {
     m_pParentView = pView;
 
-    m_bIsSingleSelection = (iListWindowFlags & wxLC_SINGLE_SEL) ? true : false ;
-    
+    // Enable Zebra Striping
+    EnableAlternateRowColours(true);
+
 #if USE_NATIVE_LISTCONTROL
     m_bProgressBarEventPending = false;
 #else
@@ -60,12 +75,6 @@ CBOINCListCtrl::CBOINCListCtrl(
     SetupMacAccessibilitySupport();
 #endif
 #endif
-
-    Connect(
-        iListWindowID, 
-        wxEVT_COMMAND_LEFT_CLICK, 
-        (wxObjectEventFunction) (wxEventFunction) (wxCommandEventFunction) &CBOINCListCtrl::OnClick
-    );
 }
 
 
@@ -206,39 +215,6 @@ void CBOINCListCtrl::AddPendingProgressBar(int row) {
 }
 
 
-void CBOINCListCtrl::OnClick(wxCommandEvent& event) {
-    wxLogTrace(wxT("Function Start/End"), wxT("CBOINCListCtrl::OnClick - Function Begin"));
-
-    wxASSERT(m_pParentView);
-    wxASSERT(wxDynamicCast(m_pParentView, CBOINCBaseView));
-
-    wxListEvent leDeselectedEvent(wxEVT_COMMAND_LIST_ITEM_DESELECTED, m_windowId);
-    leDeselectedEvent.SetEventObject(this);
-
-    if (m_bIsSingleSelection) {
-        if (GetFocusedItem() != GetFirstSelected()) {
-            wxLogTrace(wxT("Function Status"), wxT("CBOINCListCtrl::OnClick - GetFocusedItem() '%d' != GetFirstSelected() '%d'"), GetFocusedItem(), GetFirstSelected());
-
-            if (-1 == GetFirstSelected()) {
-                wxLogTrace(wxT("Function Status"), wxT("CBOINCListCtrl::OnClick - Force Selected State"));
-
-                long desiredstate = wxLIST_STATE_FOCUSED | wxLIST_STATE_SELECTED;
-                SetItemState(GetFocusedItem(), desiredstate, desiredstate);
-            } else {
-                m_pParentView->FireOnListDeselected(leDeselectedEvent);
-            }
-        }
-    } else {
-        if (-1 == GetFirstSelected()) {
-            m_pParentView->FireOnListDeselected(leDeselectedEvent);
-        }
-    }
-
-    event.Skip();
-    wxLogTrace(wxT("Function Start/End"), wxT("CBOINCListCtrl::OnClick - Function End"));
-}
-
-
 wxString CBOINCListCtrl::OnGetItemText(long item, long column) const {
     wxASSERT(m_pParentView);
     wxASSERT(wxDynamicCast(m_pParentView, CBOINCBaseView));
@@ -253,16 +229,6 @@ int CBOINCListCtrl::OnGetItemImage(long item) const {
 
     return m_pParentView->FireOnListGetItemImage(item);
 }
-
-
-#if BASEVIEW_STRIPES
-wxListItemAttr* CBOINCListCtrl::OnGetItemAttr(long item) const {
-    wxASSERT(m_pParentView);
-    wxASSERT(wxDynamicCast(m_pParentView, CBOINCBaseView));
-
-    return m_pParentView->FireOnListGetItemAttr(item);
-}
-#endif
 
 
 void CBOINCListCtrl::DrawProgressBars()
@@ -308,7 +274,7 @@ void CBOINCListCtrl::DrawProgressBars()
 #if USE_NATIVE_LISTCONTROL
         x -= GetScrollPos(wxHORIZONTAL);
 #else
-        GetMainWin()->CalcScrolledPosition(x, 0, &x, &yy);
+        CalcScrolledPosition(x, 0, &x, &yy);
 #endif
         wxFont theFont = GetFont();
         dc.SetFont(theFont);
@@ -413,11 +379,33 @@ void CBOINCListCtrl::OnDrawProgressBar(CDrawProgressBarEvent& event) {
 void MyEvtHandler::OnPaint(wxPaintEvent & event)
 {
     if (m_listCtrl) {
-        (m_listCtrl->GetMainWin())->ProcessEvent(event);
+        m_listCtrl->savedHandler->ProcessEvent(event);
         m_listCtrl->DrawProgressBars();
     } else {
         event.Skip();
     }
+}
+
+#endif
+
+
+#if ! USE_LIST_CACHE_HINT
+
+// Work around features in multiple selection virtual wxListCtrl:
+//  * It does not send deselection events (except ctrl-click).
+//  * It does not send selection events if you add to selection
+//    using Shift_Click.
+//
+// Post a special event.  This will allow this mouse event to
+// propogate through the chain to complete any selection or
+// deselection operatiion, then the special event will trigger
+// CBOINCBaseView::OnCheckSelectionChanged() to respond to the
+// selection change, if any.
+//
+void CBOINCListCtrl::OnMouseDown(wxMouseEvent& event) {
+    CCheckSelectionChangedEvent newEvent(wxEVT_CHECK_SELECTION_CHANGED, this);
+    m_pParentView->GetEventHandler()->AddPendingEvent(newEvent);
+    event.Skip();
 }
 
 #endif

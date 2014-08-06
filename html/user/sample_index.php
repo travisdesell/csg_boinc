@@ -1,7 +1,7 @@
 <?php
 // This file is part of BOINC.
 // http://boinc.berkeley.edu
-// Copyright (C) 2008 University of California
+// Copyright (C) 2014 University of California
 //
 // BOINC is free software; you can redistribute it and/or modify it
 // under the terms of the GNU Lesser General Public License
@@ -38,6 +38,7 @@ function show_nav() {
     $master_url = parse_config($config, "<master_url>");
     $no_computing = parse_config($config, "<no_computing>");
     $no_web_account_creation = parse_bool($config, "no_web_account_creation");
+    $disable_acct = parse_bool($config, "disable_account_creation");
     echo "<div class=\"mainnav\">
         <h2 class=headline>About ".PROJECT."</h2>
     ";
@@ -66,22 +67,32 @@ function show_nav() {
         <ul>
     ";
     if ($no_computing) {
-        echo "
-            <li> <a href=\"create_account_form.php\">Create an account</a>
-        ";
+        if (!$no_web_account_creation && !$disable_acct) {
+            echo "
+                <li> <a href=\"create_account_form.php\">Create an account</a>
+            ";
+        } else {
+            echo "<li> This project is not currently accepting new accounts.";
+        }
     } else {
         echo "
             <li><a href=\"info.php\">".tra("Read our rules and policies")."</a>
-            <li> This project uses BOINC.
-                If you're already running BOINC, select Add Project.
-                If not, <a target=\"_new\" href=\"http://boinc.berkeley.edu/download.php\">download BOINC</a>.
-            <li> When prompted, enter <br><b>".$master_url."</b>
         ";
-        if (!$no_web_account_creation) {
+        if (!$disable_acct) {
             echo "
-                <li> If you're running a command-line version of BOINC,
-                    <a href=\"create_account_form.php\">create an account</a> first.
+                <li> This project uses BOINC.
+                    If you're already running BOINC, select Add Project.
+                    If not, <a target=\"_new\" href=\"http://boinc.berkeley.edu/download.php\">download BOINC</a>.
+                <li> When prompted, enter <br><b>".$master_url."</b>
             ";
+            if (!$no_web_account_creation) {
+                echo "
+                    <li> If you're running a command-line version of BOINC,
+                        <a href=\"create_account_form.php\">create an account</a> first.
+                ";
+            }
+        } else {
+            echo "<li> This project is not currently accepting new accounts.";
         }
         echo "
             <li> If you have any problems,
@@ -93,30 +104,40 @@ function show_nav() {
 
         <h2 class=headline>Returning participants</h2>
         <ul>
+        <li><a href=\"home.php\">Your account</a> - view stats, modify preferences
     ";
-    if ($no_computing) {
+    if (!$no_computing) {
         echo "
-            <li><a href=\"bossa_apps.php\">Do work</a>
-            <li><a href=\"home.php\">Your account</a> - view stats, modify preferences
-            <li><a href=\"team.php\">Teams</a> - create or join a team
-        ";
-    } else {
-        echo "
-            <li><a href=\"home.php\">Your account</a> - view stats, modify preferences
             <li><a href=server_status.php>Server status</a>
-            <li><a href=\"team.php\">Teams</a> - create or join a team
             <li><a href=\"cert1.php\">Certificate</a>
             <li><a href=\"apps.php\">".tra("Applications")."</a>
+        ";
+    }
+    if (!DISABLE_TEAMS) {
+        echo "
+            <li><a href=\"team.php\">Teams</a> - create or join a team
         ";
     }
     echo "
         </ul>
         <h2 class=headline>".tra("Community")."</h2>
         <ul>
-        <li><a href=\"profile_menu.php\">".tra("Profiles")."</a>
+    ";
+    if (!DISABLE_PROFILES) {
+        echo "
+            <li><a href=\"profile_menu.php\">".tra("Profiles")."</a>
+        ";
+    }
+    echo "
         <li><a href=\"user_search.php\">User search</a>
-        <li><a href=\"forum_index.php\">".tra("Message boards")."</a>
-        <li><a href=\"forum_help_desk.php\">".tra("Questions and Answers")."</a>
+    ";
+    if (!DISABLE_FORUMS) {
+        echo "
+            <li><a href=\"forum_index.php\">".tra("Message boards")."</a>
+            <li><a href=\"forum_help_desk.php\">".tra("Questions and Answers")."</a>
+        ";
+    }
+    echo "
         <li><a href=\"stats.php\">Statistics</a>
         <li><a href=language_select.php>Languages</a>
         </ul>
@@ -172,7 +193,7 @@ echo "
     </td>
 ";
 
-if (!$stopped) {
+if (!$stopped && !DISABLE_PROFILES) {
     $profile = get_current_uotd();
     if ($profile) {
         echo "
