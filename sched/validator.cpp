@@ -180,6 +180,13 @@ int handle_wu(
     WORKUNIT& wu = items[0].wu;
     g_wup = &wu;
 
+
+    for (int i = 0; i < items.size(); i++) {
+        RESULT& result = items[i].res;
+
+        log_messages.printf(MSG_NORMAL, "result: %s\n", result.name);
+    }
+
     if (wu.canonical_resultid) {
         log_messages.printf(MSG_NORMAL,
             "[WU#%d %s] Already has canonical result %d\n",
@@ -673,6 +680,13 @@ bool do_validate_scan() {
             }
             break;
         }
+
+        log_messages.printf(MSG_DEBUG, "wu.id: %d\n", items[0].wu.id);
+
+        for (int j = 0; j < items.size(); j++) {
+            log_messages.printf(MSG_DEBUG, "items[%d].res.name: '%s', id: %d\n", j, items[j].res.name, items[j].res.id);
+        }
+
         retval = handle_wu(validator, items);
         if (!retval) found = true;
         if (++i == one_pass_N_WU) break;
