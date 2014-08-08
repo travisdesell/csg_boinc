@@ -16,7 +16,11 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with BOINC.  If not, see <http://www.gnu.org/licenses/>.
 
-require_once('../inc/sanitize_html.inc');
+$cwd = __FILE__;
+if (is_link($cwd)) $cwd = readlink($cwd);
+$cwd = dirname($cwd);
+
+require_once($cwd . "/../inc/sanitize_html.inc");
 
 // Functions that process user-supplied text (e.g. messages)
 // prior to displaying it to users.
