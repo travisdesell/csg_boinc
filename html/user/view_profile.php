@@ -53,7 +53,7 @@ if ($cacheddata){
     set_cached_data(USER_PROFILE_TTL, serialize($community_links_object), $cache_args);
 }
 
-page_head(tra("Profile: %1", $user->name));
+page_head(tra("Profile: %1", $user->name), null, null, "", null, "CSG Information");
 
 start_table();
 echo "<tr><td valign=\"top\">";

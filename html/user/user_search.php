@@ -43,7 +43,8 @@ function show_user($user) {
 }
 
 function search_form() {
-    page_head("User search");
+    page_head(tra("User Search"), null, null, "", null, "CSG Information");
+
     echo "<form name=f method=get action=user_search.php>
         <input type=hidden name=action value=search>
     ";
@@ -115,7 +116,7 @@ function search_action() {
 
     $fields = "id, create_time, name, country, total_credit, expavg_credit, teamid, url, has_profile, donated";
     $users = BoincUser::enum_fields($fields, $where, "order by $order_clause limit 100");
-    page_head(tra("User search results"));
+    page_head(tra("User Search Results"), null, null, "", null, "CSG Information");
     $n=0;
     foreach ($users as $user) {
         if ($n==0) {

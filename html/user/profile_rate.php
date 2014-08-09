@@ -33,7 +33,7 @@ if ($vote != "recommend" && $vote != "reject") {
 
 BoincProfile::update_aux("$vote=$vote+1 WHERE userid = $userid");
 
-page_head(tra("Vote Recorded"));
+page_head(tra("Vote Recorded"), null, null, "", null, "CSG Information");
 
 start_table_noborder();
 

@@ -44,7 +44,7 @@ if ($set_lang){
     }
 }
 
-page_head(tra("Language selection"));
+page_head(tra("Language Selection"), null, null, "", null, "CSG Information");
 
 function language_name($code) {
     if ($code == 'en') {

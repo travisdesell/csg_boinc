@@ -16,6 +16,10 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with BOINC.  If not, see <http://www.gnu.org/licenses/>.
 
+$cwd = __FILE__;
+if (is_link($cwd)) $cwd = readlink($cwd);
+$cwd = dirname($cwd);
+
 require_once("../inc/util_basic.inc");
 require_once("../project/project.inc");
 require_once("../inc/countries.inc");
@@ -23,6 +27,9 @@ require_once("../inc/db.inc");
 require_once("../inc/boinc_db.inc");
 require_once("../inc/translation.inc");
 require_once("../inc/profile.inc");
+
+require_once("/home/tdesell/citizen_science_grid/navbar.php");
+require_once("/home/tdesell/citizen_science_grid/footer.php");
 
 // don't allow /... at the end of URL
 
@@ -133,6 +140,7 @@ function get_logged_in_user($must_be_logged_in=true) {
 }
 
 function show_login_info($prefix="") {
+    /*
     $user = get_logged_in_user(false);
     echo "
         <table width=\"100%\" cellpadding=0 cellspacing=0>
@@ -149,6 +157,7 @@ function show_login_info($prefix="") {
         </tr>
         </table>
     ";
+     */
 }
 
 $cache_control_extra="";
@@ -159,7 +168,7 @@ $cache_control_extra="";
 //
 if (!function_exists("page_head")){
 function page_head(
-    $title, $java_onload=null, $title_plain=null, $prefix="", $head_extra=null
+    $title, $java_onload=null, $title_plain=null, $prefix="", $head_extra=null, $active_title=""
 ) {
     global $caching, $cache_control_extra, $did_page_head;
 
@@ -194,9 +203,27 @@ function page_head(
     } else {
         echo "<title>".sanitize_tags($title_plain)."</title>\n";
     }
+
     echo "<link rel=stylesheet type=\"text/css\" href=\"".$url_base."main.css\" media=\"all\">
         <link rel=stylesheet type=\"text/css\" href=\"$stylesheet\">
+
+        <!-- Latest compiled and minified CSS -->
+        <link rel='stylesheet' href='//maxcdn.bootstrapcdn.com/bootstrap/3.2.0/css/bootstrap.min.css'>
+
+        <!-- Optional theme -->
+        <link rel='stylesheet' href='//maxcdn.bootstrapcdn.com/bootstrap/3.2.0/css/bootstrap-theme.min.css'>
+
+        <!-- Custom styles for this template -->
+        <link href='css/navbar-fixed-top.css' rel='stylesheet'>
+        <link href='css/custom.css' rel='stylesheet'>
+
+        <!-- jQuery (required by Bootstrap's JavaScript plugins) -->
+        <script src='https://ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js'></script>
+
+        <!-- Latest compiled and minified JavaScript -->
+        <script src='//maxcdn.bootstrapcdn.com/bootstrap/3.2.0/js/bootstrap.min.js'></script>
     ";
+
     if ($stylesheet2) {
         echo "<link rel=stylesheet type=\"text/css\" href=\"$stylesheet2\">\n";
     }
@@ -209,9 +236,14 @@ function page_head(
     } else {
         echo "<body>";
     }
+
+    print_navbar($active_title);
+
+    echo "<div class = 'container'>";
+
     display_cvs_versions();
 
-    project_banner($title, $prefix);
+    //project_banner($title, $prefix);
     switch($title) {    //kludge
     case tra("Log in"):
     case tra("Create an account"):
@@ -242,9 +274,10 @@ function page_tail_main($show_date=false) {
 // See the comments for page_head()
 //
 if (!function_exists("page_tail")){
-function page_tail($show_date=false, $prefix="") {
-    page_tail_aux(true, $show_date, $prefix);
-}
+    function page_tail($show_date=false, $prefix="") {
+    //    page_tail_aux(true, $show_date, $prefix);
+        print_footer("Travis Desell, the DNA@Home, SubsetSum@Home and Wildlife@Home Teams", "Travis Desell, Archana Dhasarathy, Susan Ellis-Felege, Tom O'Neil, Sergei Nechaev");
+    }
 }
 
 function display_cvs_versions(){
@@ -319,7 +352,7 @@ function pretty_time_str($x) {
 }
 
 function start_table($extra="width=\"100%\"") {
-    echo "<table class=bordered $extra>";
+    echo "<table class=table bordered table-bordered $extra>";
 }
 
 function start_table_noborder($width="100%") {

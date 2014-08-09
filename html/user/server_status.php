@@ -228,7 +228,7 @@ if ($xml) {
     xml_header();
     echo $xmlstring;
 } else {
-    page_head(tra("Project status"));
+    page_head(tra("Project status"), null, null, "", null, "CSG Information");
     if ($version) {
         echo tra("Server software version: %1", $version) . " / ";
     }

@@ -31,7 +31,7 @@ if ($option) {
     exit();
 }
 
-page_head(tra("Profiles"));
+page_head(tra("Profiles"), null, null, "", null, "CSG Information");
 
 echo "
     <p>".tra("%1Profiles%2 let individuals share backgrounds and opinions with the %3 community.", "<b>", "</b>", PROJECT)." ".
@@ -97,7 +97,7 @@ function select_profile($cmd) {
         }
 
         if (count($profiles) == 0) {
-            page_head(tra("No profiles"));
+            page_head(tra("No profiles"), null, null, "", null, "CSG Information");
             echo tra("No profiles matched your query.");
             page_tail();
             exit();

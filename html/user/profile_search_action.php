@@ -35,7 +35,7 @@ $offset = get_int('offset', true);
 if (!$offset) $offset=0;
 $count = 10;
 
-page_head(tra("Profiles containing '%1'", $search_string));
+page_head(tra("Profiles containing '%1'", $search_string), null, null, "", null, "CSG Information");
 $profiles = BoincProfile::enum("match(response1, response2) against ('$search_string') limit $offset,$count");
 start_table();
 echo "

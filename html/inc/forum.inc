@@ -1150,9 +1150,10 @@ function check_post_access($user, $forum) {
     // We do not tell the (ab)user how much this is -
     // no need to make it easy for them to break the system.
     //
-    if ($user->total_credit<$forum->post_min_total_credit || $user->expavg_credit<$forum->post_min_expavg_credit) {
-        error_page(tra("In order to create a new thread in %1 you must have a certain amount of credit. This is to prevent and protect against abuse of the system.", $forum->title));
-    }
+    if ($user->total_credit < $forum->post_min_total_credit && $user->total_events < $forum->post_min_total_events) {
+        error_page(tra("In order to create a new thread in %1 you must have a certain amount of credit or have watched a video. This is to prevent and protect against abuse of the forums by spammers. To gain access to the forums visit our <a href='http://volunteer.cs.und.edu/wildlife/video_selector.php'>Video Selection</a> webpage and click a <i>watch video</i> button for one of the species and sites. You should then be able to post in our forums.", $forum->title));
+    }    
+
 
     // If the user is posting faster than forum regulations allow
     // Tell the user to wait a while before creating any more posts
