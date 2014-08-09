@@ -79,7 +79,7 @@ function foundership_transfer_link($user, $team) {
 
 function display_team_page($team, $user) {
     global $team_name_sites;
-    page_head("$team->name");
+    page_head("$team->name", null, null, "", null, "CSG Information");
 
     echo sanitize_html($team->name_html);
     echo "<p>";
