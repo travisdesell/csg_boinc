@@ -233,11 +233,11 @@ if ($xml) {
         echo tra("Server software version: %1", $version) . " / ";
     }
     echo time_str(time()), "
-        <table width=100%>
+        <table class='table' width=100%>
         <tr>
         <td width=40% valign=top>
         <h2>".tra("Server status")."</h2>
-        <table border=0 cellpadding=4>
+        <table class='table' border=0 cellpadding=4>
         <tr><th>".tra("Program")."</th><th>".tra("Host")."</th><th>".tra("Status")."</th></tr>
     ";
 }
@@ -309,8 +309,8 @@ if ($retval) {
     echo tra("The database server is not accessible");
 } else {
     if (!$xml) {
-        echo "<table border=0 cellpadding=0 cellspacing=0><tr><td>
-            <table border=0 cellpadding=4>
+        echo "<table class='table' border=0 cellpadding=0 cellspacing=0><tr><td>
+            <table class='table' border=0 cellpadding=4>
             <tr><th>".tra("Work")."</th><th>#</th></tr>
         ";
     }
@@ -370,7 +370,7 @@ if ($retval) {
     );
     if (!$xml) {
         echo "</table></td><td>";
-        echo "<table>";
+        echo "<table class='table'>";
         echo "<tr><th>".tra("Users")."</th><th>#</th></tr>";
     }
     show_counts(

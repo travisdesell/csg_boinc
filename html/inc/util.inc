@@ -210,8 +210,9 @@ function page_head(
         <!-- Latest compiled and minified CSS -->
         <link rel='stylesheet' href='//maxcdn.bootstrapcdn.com/bootstrap/3.2.0/css/bootstrap.min.css'>
 
-        <!-- Optional theme -->
+        <!-- Optional theme
         <link rel='stylesheet' href='//maxcdn.bootstrapcdn.com/bootstrap/3.2.0/css/bootstrap-theme.min.css'>
+        -->
 
         <!-- Custom styles for this template -->
         <link href='css/navbar-fixed-top.css' rel='stylesheet'>
