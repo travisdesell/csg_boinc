@@ -16,9 +16,9 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with BOINC.  If not, see <http://www.gnu.org/licenses/>.
 
-$cwd = __FILE__;
-if (is_link($cwd)) $cwd = readlink($cwd);
-$cwd = dirname($cwd);
+$cwd[__FILE__] = __FILE__;
+if (is_link($cwd[__FILE__])) $cwd[__FILE__] = readlink($cwd[__FILE__]);
+$cwd[__FILE__] = dirname($cwd[__FILE__]);
 
 require_once("../inc/util_basic.inc");
 require_once("../project/project.inc");
