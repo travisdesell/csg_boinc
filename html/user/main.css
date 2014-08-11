@@ -315,14 +315,14 @@ td.leftcol {
 }
 
 .authorcol {
-    width: 136px;
+    width: 220px;
 }
 
 div.authorcol {
     border-width: 1px;
     border-style: solid;
     padding: 8px 5px;
-    width: 120px;
+    width: 204px;
     margin: 2px 0 2px 2px;
     overflow: hidden;
     word-wrap: break-word;

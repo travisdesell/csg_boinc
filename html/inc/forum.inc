@@ -21,6 +21,7 @@ require_once("../inc/pm.inc");
 require_once("../inc/team.inc");
 require_once("../inc/news.inc");
 require_once("../inc/text_transform.inc");
+require_once('/home/tdesell/wildlife_at_home/webpage/display_badges.php');
 
 define('THREADS_PER_PAGE', 50);
 
@@ -596,8 +597,20 @@ function show_post(
         //
         //echo "ID: ".$user->id."<br>";
         if (!no_computing()) {
-            echo tra("Credit: %1", number_format($user->total_credit)) ."<br>";
-            echo tra("RAC: %1",    number_format($user->expavg_credit))."<br>";
+            echo tra("Combined Credit: %1", number_format($user->total_credit + $user->dna_total_credit + $user->sss_total_credit)) ."<br>";
+            echo tra("DNA@Home Credit: %1", number_format($user->dna_total_credit)) ."<br>";
+            //echo tra("DNA RAC: %1",    number_format($user->dna_expavg_credit))."<br>";
+            echo tra("SubsetSum@Home Credit: %1", number_format($user->sss_total_credit)) ."<br>";
+            //echo tra("SSS RAC: %1",    number_format($user->sss_expavg_credit))."<br>";
+            echo tra("Wildlife@Home Credit: %1", number_format($user->total_credit)) ."<br>";
+            //echo tra("Wildlife RAC: %1",    number_format($user->expavg_credit))."<br>";
+            echo tra("Wildlife@Home Watched: %1s", number_format($user->bossa_total_credit)) . "<br>";
+            echo tra("Wildlife@Home Events: %1", number_format($user->valid_events)) . "<br>";
+
+            if ($user->total_credit > 10000 || $user->bossa_total_credit > 10000) {
+                echo "<br>";
+                echo get_badges($user);
+            }
         }
 
         // to use this feature:

@@ -24,6 +24,8 @@ require_once("../inc/friend.inc");
 require_once("../inc/forum_db.inc");
 require_once("../inc/notify.inc");
 
+require_once('/home/tdesell/wildlife_at_home/webpage/display_badges.php');
+
 function parse_project($f) {
     $p = new StdClass;
     $p->total_credit = 0.0;
@@ -135,8 +137,24 @@ function total_posts($user) {
 }
 
 function show_credit($user) {
-    row2(tra("Total credit"), format_credit_large($user->total_credit));
-    row2(tra("Recent average credit"), format_credit($user->expavg_credit));
+    row2(tra("Citizen Science Grid combined credit"), format_credit_large($user->dna_total_credit + $user->sss_total_credit + $user->total_credit));
+
+    row2(tra("DNA@Home total credit"), format_credit_large($user->dna_total_credit));
+    row2(tra("DNA@Home recent average credit"), format_credit($user->dna_expavg_credit));
+
+    row2(tra("SubsetSum@Home total credit"), format_credit_large($user->sss_total_credit));
+    row2(tra("SubsetSum@Home recent average credit"), format_credit($user->sss_expavg_credit));
+
+    row2(tra("Wildlife@Home total credit"), format_credit_large($user->total_credit));
+    row2(tra("Wildlife@Home recent average credit"), format_credit($user->expavg_credit));
+
+    row2(tra("Wildlife@Home watched"), number_format($user->bossa_total_credit) . " seconds");
+    row2(tra("Wildlife@Home marked"), number_format($user->valid_events) . " valid events");
+
+    $badges = get_badges($user);
+    row2(tra("Badges"), $badges);
+
+
     project_user_credit($user);
 }
 
