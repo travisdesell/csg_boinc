@@ -108,12 +108,33 @@ function get_output_options($user) {
 // Converts bbcode to proper HTML
 // If $export is true, don't use BOINC CSS
 
+// handle [pre] separately because we need to remove <br />s
+//
+function replace_pre($text, $export) {
+    if ($export) {
+        return preg_replace_callback(
+            "@\[pre\](.*?)\[/pre\]@is",
+            function ($matches) {
+                return "<pre>".remove_br(substr($matches[0], 5, -6))."</pre>";
+            },
+            $text
+        );
+    } else {
+        return preg_replace_callback(
+            "@\[pre\](.*?)\[/pre\]@is",
+            function ($matches) {
+                return "<div class=\"pre\">".remove_br(substr($matches[0], 5, -6))."</div>";
+            },
+            $text
+        );
+    }
+}
+
 function bb2html($text, $export=false) {
     $urlregex = "(?:\"?)(?:(http\:\/\/)?)([^\[\"<\ ]+)(?:\"?)";
     $httpsregex = "(?:\"?)https\:\/\/([^\[\"<\ ]+)(?:\"?)";
     // List of allowable tags
     $bbtags = array (
-        "@\[pre\](.*?)\[/pre\]@is",
         "@\[code\](.*?)\[/code\]@is",
         "@\[b\](.*?)\[/b\]@is",
         "@\[i\](.*?)\[/i\]@is",
@@ -147,7 +168,6 @@ function bb2html($text, $export=false) {
     // What the above tags are turned in to
     if ($export) {
         $htmltags = array (
-            "<pre>\\1</pre>",
             "<code>\\1</code>",
             "<b>\\1</b>",
             "<i>\\1</i>",
@@ -176,7 +196,6 @@ function bb2html($text, $export=false) {
         );
     } else {
         $htmltags = array (
-            "<div class=\"pre\">\\1</div>",
             "<div class=\"code\">\\1</div>",
             "<b>\\1</b>",
             "<i>\\1</i>",
@@ -211,7 +230,8 @@ function bb2html($text, $export=false) {
     // $i<1000 to prevent DoS
     while ($text != $lasttext && $i<1000) {
         $lasttext = $text;
-        $text = preg_replace($bbtags,$htmltags,$text);
+        $text = replace_pre($text, $export);
+        $text = preg_replace($bbtags, $htmltags, $text);
         $i = $i + 1;
     }
     return $text;
