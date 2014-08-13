@@ -88,7 +88,8 @@ typedef enum {
     NO_CHANGE
 } TRANSITION_TIME;
 
-char app_name[256];
+//char app_name[256];   -- moved to credit.cpp
+
 DB_APP app;
 int wu_id_modulus=0;
 int wu_id_remainder=0;

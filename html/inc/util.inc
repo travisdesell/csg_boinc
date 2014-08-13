@@ -280,6 +280,10 @@ if (!function_exists("page_tail")){
     function page_tail($show_date=false, $prefix="") {
     //    page_tail_aux(true, $show_date, $prefix);
         print_footer("Travis Desell, the DNA@Home, SubsetSum@Home and Wildlife@Home Teams", "Travis Desell, Archana Dhasarathy, Susan Ellis-Felege, Tom O'Neil, Sergei Nechaev");
+        echo "</div>
+            </body>
+            </html>
+        ";
     }
 }
 

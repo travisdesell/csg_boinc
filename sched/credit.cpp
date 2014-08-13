@@ -36,6 +36,8 @@
 
 #include "credit.h"
 
+char app_name[256];
+
 double fpops_to_credit(double fpops) {
     return fpops*COBBLESTONE_SCALE;
 }
@@ -55,6 +57,11 @@ int grant_credit(DB_HOST &host, double start_time, double credit) {
     int retval;
     char buf[256];
     double now = dtime();
+
+    log_messages.printf(MSG_CRITICAL, "app name is: '%s'\n", app_name);
+    //if app_name == gibbs, multiple credit by 7.5, assign to dna_total_credit, etc as well
+    //if app_name starts with wildlife, assign to wildlife_total_credit, etc as well
+    //if app_name starts with subset_sum, assign to sss_total_credit, etc as well
 
     // first, process the host
 

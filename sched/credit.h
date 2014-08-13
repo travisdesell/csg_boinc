@@ -35,6 +35,9 @@
 #define AV_AVG_WEIGHT   .001
 #define AV_AVG_LIMIT    10
 
+extern char app_name[256];
+
+
 // variant of DB_APP_VERSION used by the validator
 //
 struct DB_APP_VERSION_VAL : DB_APP_VERSION {
