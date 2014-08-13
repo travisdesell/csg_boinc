@@ -598,13 +598,13 @@ function show_post(
         //
         //echo "ID: ".$user->id."<br>";
         if (!no_computing()) {
-            echo tra("Combined Credit: %1", number_format($user->total_credit + $user->dna_total_credit + $user->sss_total_credit)) ."<br>";
+            echo tra("Combined Credit: %1", number_format($user->wildlife_total_credit + $user->dna_total_credit + $user->sss_total_credit)) ."<br>";
             echo tra("DNA@Home Credit: %1", number_format($user->dna_total_credit)) ."<br>";
             //echo tra("DNA RAC: %1",    number_format($user->dna_expavg_credit))."<br>";
             echo tra("SubsetSum@Home Credit: %1", number_format($user->sss_total_credit)) ."<br>";
             //echo tra("SSS RAC: %1",    number_format($user->sss_expavg_credit))."<br>";
-            echo tra("Wildlife@Home Credit: %1", number_format($user->total_credit)) ."<br>";
-            //echo tra("Wildlife RAC: %1",    number_format($user->expavg_credit))."<br>";
+            echo tra("Wildlife@Home Credit: %1", number_format($user->wildlife_total_credit)) ."<br>";
+            //echo tra("Wildlife RAC: %1",    number_format($user->wildlife_expavg_credit))."<br>";
             echo tra("Wildlife@Home Watched: %1s", number_format($user->bossa_total_credit)) . "<br>";
             echo tra("Wildlife@Home Events: %1", number_format($user->valid_events)) . "<br>";
 

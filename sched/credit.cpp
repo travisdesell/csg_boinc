@@ -88,10 +88,30 @@ int grant_credit(DB_HOST &host, double start_time, double credit) {
         start_time, credit, CREDIT_HALF_LIFE,
         user.expavg_credit, user.expavg_time
     );
-    sprintf(
-        buf, "total_credit=total_credit+%.15e, expavg_credit=%.15e, expavg_time=%.15e",
-        credit,  user.expavg_credit, user.expavg_time
-    );
+
+    if (0 == strcmp(app_name, "gibbs")) {
+        credit *= 7.5; //dna@home credit modifier
+
+        sprintf(
+            buf, "total_credit=total_credit+%.15e, expavg_credit=%.15e, expavg_time=%.15e, dna_total_credit=dna_total_credit+%.15e, dna_expavg_credit=%.15e, dna_expavg_time=%.15e",
+            credit,  user.expavg_credit, user.expavg_time, credit, user.expavg_credit, user.expavg_time
+        );
+    } else if (0 == strcmp(app_name, "subset_sum")) {
+        sprintf(
+            buf, "total_credit=total_credit+%.15e, expavg_credit=%.15e, expavg_time=%.15e, sss_total_credit=sss_total_credit+%.15e, sss_expavg_credit=%.15e, sss_expavg_time=%.15e",
+            credit,  user.expavg_credit, user.expavg_time, credit, user.expavg_credit, user.expavg_time
+        );
+    } else if (0 == strcmp(app_name, "wildlife") || 0 == strcmp(app_name, "wildlife_surf") || 0 == strcmp(app_name,"wildlife_surf_collect")) {
+        sprintf(
+            buf, "total_credit=total_credit+%.15e, expavg_credit=%.15e, expavg_time=%.15e, wildlife_total_credit=wildlife_total_credit+%.15e, wildlife_expavg_credit=%.15e, wildlife_expavg_time=%.15e",
+            credit,  user.expavg_credit, user.expavg_time, credit, user.expavg_credit, user.expavg_time
+        );
+    } else {
+        sprintf(
+            buf, "total_credit=total_credit+%.15e, expavg_credit=%.15e, expavg_time=%.15e",
+            credit,  user.expavg_credit, user.expavg_time
+        );
+    }
     retval = user.update_field(buf);
     if (retval) {
         log_messages.printf(MSG_CRITICAL,

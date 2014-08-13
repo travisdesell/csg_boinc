@@ -137,7 +137,7 @@ function total_posts($user) {
 }
 
 function show_credit($user) {
-    row2(tra("Citizen Science Grid combined credit"), format_credit_large($user->dna_total_credit + $user->sss_total_credit + $user->total_credit));
+    row2(tra("Citizen Science Grid combined credit"), format_credit_large($user->wildlife_total_credit + $user->dna_total_credit + $user->sss_total_credit));
 
     row2(tra("DNA@Home total credit"), format_credit_large($user->dna_total_credit));
     row2(tra("DNA@Home recent average credit"), format_credit($user->dna_expavg_credit));
@@ -145,8 +145,8 @@ function show_credit($user) {
     row2(tra("SubsetSum@Home total credit"), format_credit_large($user->sss_total_credit));
     row2(tra("SubsetSum@Home recent average credit"), format_credit($user->sss_expavg_credit));
 
-    row2(tra("Wildlife@Home total credit"), format_credit_large($user->total_credit));
-    row2(tra("Wildlife@Home recent average credit"), format_credit($user->expavg_credit));
+    row2(tra("Wildlife@Home total credit"), format_credit_large($user->wildlife_total_credit));
+    row2(tra("Wildlife@Home recent average credit"), format_credit($user->wildlife_expavg_credit));
 
     row2(tra("Wildlife@Home watched"), number_format($user->bossa_total_credit) . " seconds");
     row2(tra("Wildlife@Home marked"), number_format($user->valid_events) . " valid events");
