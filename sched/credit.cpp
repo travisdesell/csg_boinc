@@ -55,13 +55,17 @@ int grant_credit(DB_HOST &host, double start_time, double credit) {
     DB_USER user;
     DB_TEAM team;
     int retval;
-    char buf[256];
+    char buf[512];
     double now = dtime();
 
     log_messages.printf(MSG_CRITICAL, "app name is: '%s'\n", app_name);
     //if app_name == gibbs, multiple credit by 7.5, assign to dna_total_credit, etc as well
     //if app_name starts with wildlife, assign to wildlife_total_credit, etc as well
     //if app_name starts with subset_sum, assign to sss_total_credit, etc as well
+
+    if (0 == strcmp(app_name, "gibbs")) {
+        credit *= 7.5; //apply dna@home credit modifier
+    }
 
     // first, process the host
 
@@ -71,6 +75,54 @@ int grant_credit(DB_HOST &host, double start_time, double credit) {
         host.expavg_credit, host.expavg_time
     );
     host.total_credit += credit;
+
+    //need to update the other credit fields for the host, the regular credit is updated by the validator
+    if (0 == strcmp(app_name, "gibbs")) {
+        sprintf(
+            buf, "UPDATE host SET dna_total_credit=dna_total_credit+%.15e, dna_expavg_credit=%.15e, dna_expavg_time=%.15e WHERE id = %d",
+            credit, host.expavg_credit, host.expavg_time, host.id
+        );
+
+        log_messages.printf(MSG_CRITICAL, "Updating host with: '%s'\n", buf);
+
+        mysql_query(boinc_db.mysql, buf);
+
+        if (mysql_errno(boinc_db.mysql) != 0) {
+            log_messages.printf(MSG_CRITICAL, "ERROR in MySQL query: '%s'. Error: %d -- '%s'. Thrown on '%s': %d\n", buf, mysql_errno(boinc_db.mysql), mysql_error(boinc_db.mysql), __FILE__, __LINE__);
+            exit(1);
+        }
+
+    } else if (0 == strcmp(app_name, "subset_sum")) {
+        sprintf(
+            buf, "UPDATE host SET sss_total_credit=sss_total_credit+%.15e, sss_expavg_credit=%.15e, sss_expavg_time=%.15e WHERE id = %d",
+            credit, host.expavg_credit, host.expavg_time, host.id
+        );
+
+        log_messages.printf(MSG_CRITICAL, "Updating host with: '%s'\n", buf);
+
+        mysql_query(boinc_db.mysql, buf);
+
+        if (mysql_errno(boinc_db.mysql) != 0) {
+            log_messages.printf(MSG_CRITICAL, "ERROR in MySQL query: '%s'. Error: %d -- '%s'. Thrown on '%s': %d\n", buf, mysql_errno(boinc_db.mysql), mysql_error(boinc_db.mysql), __FILE__, __LINE__);
+            exit(1);
+        }
+
+    } else if (0 == strcmp(app_name, "wildlife") || 0 == strcmp(app_name, "wildlife_surf") || 0 == strcmp(app_name,"wildlife_surf_collect")) {
+        sprintf(
+            buf, "UPDATE host SET wildlife_total_credit=wildlife_total_credit+%.15e, wildlife_expavg_credit=%.15e, wildlife_expavg_time=%.15e WHERE id = %d",
+            credit, host.expavg_credit, host.expavg_time, host.id
+        );
+
+        log_messages.printf(MSG_CRITICAL, "Updating host with: '%s'\n", buf);
+
+        mysql_query(boinc_db.mysql, buf);
+
+        if (mysql_errno(boinc_db.mysql) != 0) {
+            log_messages.printf(MSG_CRITICAL, "ERROR in MySQL query: '%s'. Error: %d -- '%s'. Thrown on '%s': %d\n", buf, mysql_errno(boinc_db.mysql), mysql_error(boinc_db.mysql), __FILE__, __LINE__);
+            exit(1);
+        }
+
+    }
 
     // then the user
 
@@ -90,8 +142,6 @@ int grant_credit(DB_HOST &host, double start_time, double credit) {
     );
 
     if (0 == strcmp(app_name, "gibbs")) {
-        credit *= 7.5; //dna@home credit modifier
-
         sprintf(
             buf, "total_credit=total_credit+%.15e, expavg_credit=%.15e, expavg_time=%.15e, dna_total_credit=dna_total_credit+%.15e, dna_expavg_credit=%.15e, dna_expavg_time=%.15e",
             credit,  user.expavg_credit, user.expavg_time, credit, user.expavg_credit, user.expavg_time
@@ -112,6 +162,8 @@ int grant_credit(DB_HOST &host, double start_time, double credit) {
             credit,  user.expavg_credit, user.expavg_time
         );
     }
+    log_messages.printf(MSG_CRITICAL, "updating user %d - '%s' with: '%s'\n", user.id, user.name, buf);
+
     retval = user.update_field(buf);
     if (retval) {
         log_messages.printf(MSG_CRITICAL,
@@ -131,15 +183,35 @@ int grant_credit(DB_HOST &host, double start_time, double credit) {
             );
             return retval;
         }
+
         update_average(
             now,
             start_time, credit, CREDIT_HALF_LIFE,
             team.expavg_credit, team.expavg_time
         );
-        sprintf(buf,
-            "total_credit=total_credit+%.15e, expavg_credit=%.15e, expavg_time=%.15e",
-            credit,  team.expavg_credit, team.expavg_time
-        );
+
+        if (0 == strcmp(app_name, "gibbs")) {
+            sprintf(
+                    buf, "total_credit=total_credit+%.15e, expavg_credit=%.15e, expavg_time=%.15e, dna_total_credit=dna_total_credit+%.15e, dna_expavg_credit=%.15e, dna_expavg_time=%.15e",
+                    credit,  team.expavg_credit, team.expavg_time, credit, team.expavg_credit, team.expavg_time
+                   );
+        } else if (0 == strcmp(app_name, "subset_sum")) {
+            sprintf(
+                    buf, "total_credit=total_credit+%.15e, expavg_credit=%.15e, expavg_time=%.15e, sss_total_credit=sss_total_credit+%.15e, sss_expavg_credit=%.15e, sss_expavg_time=%.15e",
+                    credit,  team.expavg_credit, team.expavg_time, credit, team.expavg_credit, team.expavg_time
+                   );
+        } else if (0 == strcmp(app_name, "wildlife") || 0 == strcmp(app_name, "wildlife_surf") || 0 == strcmp(app_name,"wildlife_surf_collect")) {
+            sprintf(
+                    buf, "total_credit=total_credit+%.15e, expavg_credit=%.15e, expavg_time=%.15e, wildlife_total_credit=wildlife_total_credit+%.15e, wildlife_expavg_credit=%.15e, wildlife_expavg_time=%.15e",
+                    credit,  team.expavg_credit, team.expavg_time, credit, team.expavg_credit, team.expavg_time
+                   );
+        } else {
+            sprintf(
+                    buf, "total_credit=total_credit+%.15e, expavg_credit=%.15e, expavg_time=%.15e",
+                    credit,  team.expavg_credit, team.expavg_time
+                   );
+        }
+
         retval = team.update_field(buf);
         if (retval) {
             log_messages.printf(MSG_CRITICAL,
