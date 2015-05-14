@@ -22,6 +22,19 @@
 #pragma interface "SkinManager.cpp"
 #endif
 
+#include "miofile.h"
+
+enum {
+    BKGD_ANCHOR_HORIZ_LEFT,
+    BKGD_ANCHOR_HORIZ_CENTER,
+    BKGD_ANCHOR_HORIZ_RIGHT
+};
+
+enum {
+    BKGD_ANCHOR_VERT_TOP,
+    BKGD_ANCHOR_VERT_CENTER,
+    BKGD_ANCHOR_VERT_BOTTOM
+};
 
 class CSkinItem : public wxObject
 {
@@ -48,6 +61,8 @@ public:
 
     wxBitmap* GetBitmap();
     wxColour* GetBackgroundColor();
+    int  GetHorizontalAnchor() { return m_iAnchorHorizontal; }
+    int  GetVerticalAnchor() { return m_iAnchorVertical; }
 
     bool SetDefaults(
         wxString strComponentName, 
@@ -57,7 +72,9 @@ public:
     bool SetDefaults(
         wxString strComponentName,
         const char** ppDefaultImage,
-        wxString strBackgroundColor
+        wxString strBackgroundColor,
+        int horizontalAnchor = BKGD_ANCHOR_HORIZ_LEFT,
+        int verticalAnchor = BKGD_ANCHOR_VERT_TOP
     );
 
     bool Validate();
@@ -70,6 +87,9 @@ private:
     wxString     m_strDefaultBackgroundColor;
     wxBitmap     m_bmpBitmap;
     wxColour     m_colBackgroundColor;
+    // Anchors are used only by m_BackgroundImage and m_DialogBackgroundImage
+    int          m_iAnchorHorizontal;
+    int          m_iAnchorVertical;
 };
 
 

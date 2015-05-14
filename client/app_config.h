@@ -35,6 +35,7 @@ struct APP_CONFIG {
     bool fraction_done_exact;
 
     int parse(XML_PARSER&, PROJECT*);
+    int parse_gpu_versions(XML_PARSER&, PROJECT*);
 };
 
 struct APP_VERSION_CONFIG {
@@ -54,7 +55,7 @@ struct APP_CONFIGS {
 
     int parse(XML_PARSER&, PROJECT*);
     int parse_file(FILE*, PROJECT*);
-    void config_app_versions(PROJECT*, bool show_warnings);
+    int config_app_versions(PROJECT*, bool show_warnings);
     void clear() {
         app_configs.clear();
         app_version_configs.clear();

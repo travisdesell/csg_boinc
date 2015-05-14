@@ -10,7 +10,7 @@ COMPILECURL="yes"
 CONFIGURE="yes"
 MAKECLEAN="yes"
 
-CURL="/home/boincadm/src/curl-7.37.0" #CURL sources, required by BOINC
+CURL="/home/boincadm/src/curl-7.39.0" #CURL sources, required by BOINC
 
 export ANDROIDTC="$HOME/androidarm-tc"
 export TCBINARIES="$ANDROIDTC/bin"
@@ -22,9 +22,9 @@ export PATH="$PATH:$TCBINARIES:$TCINCLUDES/bin"
 export CC=arm-linux-androideabi-gcc
 export CXX=arm-linux-androideabi-g++
 export LD=arm-linux-androideabi-ld
-export CFLAGS="--sysroot=$TCSYSROOT -DANDROID -Wall -I$TCINCLUDES/include -O3 -fomit-frame-pointer"
-export CXXFLAGS="--sysroot=$TCSYSROOT -DANDROID -Wall -funroll-loops -fexceptions -O3 -fomit-frame-pointer"
-export LDFLAGS="-L$TCSYSROOT/usr/lib -L$TCINCLUDES/lib -llog"
+export CFLAGS="--sysroot=$TCSYSROOT -DANDROID -Wall -I$TCINCLUDES/include -O3 -fomit-frame-pointer -fPIE"
+export CXXFLAGS="--sysroot=$TCSYSROOT -DANDROID -Wall -funroll-loops -fexceptions -O3 -fomit-frame-pointer -fPIE"
+export LDFLAGS="-L$TCSYSROOT/usr/lib -L$TCINCLUDES/lib -llog -fPIE -pie"
 export GDB_CFLAGS="--sysroot=$TCSYSROOT -Wall -g -I$TCINCLUDES/include"
 
 # Prepare android toolchain and environment

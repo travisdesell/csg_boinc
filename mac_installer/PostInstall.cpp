@@ -262,11 +262,11 @@ int main(int argc, char *argv[])
     
     LoadPreferredLanguages();
 
-    if (compareOSVersionTo(10, 5) < 0) {
+    if (compareOSVersionTo(10, 6) < 0) {
         ::SetFrontProcess(&ourProcess);
         // Remove everything we've installed
-        // "\pSorry, this version of GridRepublic requires system 10.5 or higher."
-        s[0] = sprintf(s+1, "Sorry, this version of %s requires system 10.5 or higher.", brandName[brandID]);
+        // "\pSorry, this version of GridRepublic requires system 10.6 or higher."
+        s[0] = sprintf(s+1, "Sorry, this version of %s requires system 10.6 or higher.", brandName[brandID]);
         StandardAlert (kAlertStopAlert, (StringPtr)s, NULL, NULL, &itemHit);
 
         // "rm -rf /Applications/GridRepublic\\ Desktop.app"
@@ -1530,6 +1530,18 @@ OSErr UpdateAllVisibleUsers(long brandID)
                 }
             }
         }
+
+        // Delete the BOINC Manager's wxSingleInstanceChecker lock file, in case
+        // it was not deleted (such as due to a crash.)
+        // Lock file name always has "BOINC Manager" even if the application is
+        // branded, due to SetAppName(wxT("BOINC Manager")) in CBOINCGUIApp::OnInit().
+        // This path must match that in CBOINCGUIApp::DetectDuplicateInstance()
+        sprintf(cmd, "sudo -u \"%s\" rm -f \"/Users/%s/Library/Application Support/BOINC/BOINC Manager-%s\"",
+                            pw->pw_name, pw->pw_name, pw->pw_name);
+        err = system(cmd);
+        printf("[2] %s returned %d\n", cmd, err);
+        fflush(stdout);
+
     }   // End for (userIndex=0; userIndex< human_user_names.size(); ++userIndex)
 
     ResynchSystem();

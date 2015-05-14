@@ -28,8 +28,8 @@
 
 
 #define SORTTASKLIST 1  /* TRUE to sort task selection control alphabetically */
-#define SLIDESHOWWIDTH 290
-#define SLIDESHOWHEIGHT 126
+#define SLIDESHOWWIDTH ADJUSTFORXDPI(290)
+#define SLIDESHOWHEIGHT ADJUSTFORYDPI(126)
 #define SLIDESHOWBORDER 1
 #define HIDEDEFAULTSLIDE 1
 #define TESTALLDESCRIPTIONS 0
@@ -70,7 +70,7 @@ CScrolledTextBox::~CScrolledTextBox() {
 
 
 void CScrolledTextBox::SetValue(const wxString& s) {
-    int lineHeight, totalLines, totalWidth, usableWidth;
+    int lineHeight, totalLines, totalWidth;
     wxString t = s;
 
     // Delete sizer & its children (CTransparentStaticText objects)
@@ -85,15 +85,15 @@ void CScrolledTextBox::SetValue(const wxString& s) {
     totalWidth = GetSize().GetWidth();
     totalLines = Wrap(t, totalWidth, &lineHeight);
     m_TextSizer->FitInside(this);
-    usableWidth = GetClientSize().GetWidth();
-    if (usableWidth < totalWidth) {
+    SetScrollRate(1, lineHeight);
+    int scrollLines = GetScrollLines(wxVERTICAL);   // Returns 0 if no scrollbar
+    if (scrollLines > 0) {
+        int sbwidth = wxSystemSettings::GetMetric(wxSYS_VSCROLL_X);
         // It has a vertical scroll bar, so wrap again for reduced width
         m_TextSizer->Clear(true);
-        totalLines = Wrap(t, usableWidth - SCROLLBARSPACER, &lineHeight);
+        totalLines = Wrap(t, totalWidth - sbwidth - SCROLLBARSPACER, &lineHeight);
         m_TextSizer->FitInside(this);
     }
-
-    SetScrollRate(1, lineHeight);
 }
 
         
@@ -355,25 +355,27 @@ numSlides = 0;
         ratio = 1.0;
         xRatio = (double)SLIDESHOWWIDTH / (double)m_SlideBitmap.GetWidth();
         yRatio = (double)SLIDESHOWHEIGHT / (double)m_SlideBitmap.GetHeight();
-        if ( xRatio < ratio ) {
-            ratio = xRatio;
-        }
+        ratio = xRatio;
         if ( yRatio < ratio ) {
             ratio = yRatio;
         }
-        if ( ratio < 1.0 ) {
+        if ( (ratio < 0.95) || (ratio > 1.05) ) {
             wxImage img = m_SlideBitmap.ConvertToImage();
-            img.Rescale((int) (m_SlideBitmap.GetWidth()*ratio), (int) (m_SlideBitmap.GetHeight()*ratio));
+            img.Rescale((int) (m_SlideBitmap.GetWidth()*ratio), 
+						(int) (m_SlideBitmap.GetHeight()*ratio), 
+						(ratio > 1.0) ? wxIMAGE_QUALITY_BILINEAR : wxIMAGE_QUALITY_BOX_AVERAGE
+					);
             wxBitmap *bm = new wxBitmap(img);
             m_SlideBitmap = *bm;
             delete bm;
         }
+
         Refresh();
     }
 }
 
 
-void CSlideShowPanel::OnPaint(wxPaintEvent& WXUNUSED(event)) 
+void CSlideShowPanel::OnPaint(wxPaintEvent& WXUNUSED(event))
 { 
     wxPaintDC dc(this);
 #if HIDEDEFAULTSLIDE
@@ -408,10 +410,10 @@ numSlides = 0;
         
         if(m_SlideBitmap.Ok()) 
         {
-            dc.DrawBitmap(m_SlideBitmap,
-                            (w - m_SlideBitmap.GetWidth())/2,
-                            (h - m_SlideBitmap.GetHeight())/2
-                            ); 
+		    dc.DrawBitmap(m_SlideBitmap,
+                        (w - m_SlideBitmap.GetWidth())/2,
+                        (h - m_SlideBitmap.GetHeight())/2
+                        ); 
         }
     }
     
@@ -477,7 +479,7 @@ CSimpleTaskPanel::CSimpleTaskPanel( wxWindow* parent ) :
 
     m_myTasksLabel = new CTransparentStaticText( this, wxID_ANY, _("Tasks:"), wxDefaultPosition, wxDefaultSize, 0 );
     m_myTasksLabel->Wrap( -1 );
-    bSizer2->Add( m_myTasksLabel, 0, wxRIGHT, 5 );
+    bSizer2->Add( m_myTasksLabel, 0, wxRIGHT, ADJUSTFORXDPI(5) );
     
     m_TaskSelectionCtrl = new CBOINCBitmapComboBox( this, ID_SGTASKSELECTOR, wxT(""), wxDefaultPosition, wxDefaultSize, 0, NULL, wxCB_READONLY ); 
     // TODO: Might want better wording for Task Selection Combo Box tooltip
@@ -485,16 +487,16 @@ CSimpleTaskPanel::CSimpleTaskPanel( wxWindow* parent ) :
     m_TaskSelectionCtrl->SetToolTip(str);
     bSizer2->Add( m_TaskSelectionCtrl, 1, wxRIGHT | wxEXPAND, SIDEMARGINS );
     
-    bSizer1->Add( bSizer2, 0, wxEXPAND | wxTOP | wxLEFT, 10 );
+    bSizer1->Add( bSizer2, 0, wxEXPAND | wxTOP | wxLEFT, ADJUSTFORXDPI(10) );
     
-    bSizer1->AddSpacer(5);
+    bSizer1->AddSpacer(ADJUSTFORYDPI(5));
     
     wxBoxSizer* bSizer3;
     bSizer3 = new wxBoxSizer( wxHORIZONTAL );
     
     m_TaskProjectLabel = new CTransparentStaticText( this, wxID_ANY, _("From:"), wxDefaultPosition, wxDefaultSize, 0 );
     m_TaskProjectLabel->Wrap( -1 );
-    bSizer3->Add( m_TaskProjectLabel, 0, wxRIGHT, 5 );
+    bSizer3->Add( m_TaskProjectLabel, 0, wxRIGHT, ADJUSTFORXDPI(5) );
     
     m_TaskProjectName = new CTransparentStaticText( this, wxID_ANY, wxT("SETI@home"), wxDefaultPosition, wxDefaultSize, wxST_NO_AUTORESIZE );
     m_TaskProjectName->Wrap( -1 );
@@ -512,7 +514,7 @@ CSimpleTaskPanel::CSimpleTaskPanel( wxWindow* parent ) :
     bSizer1->Add( m_TaskApplicationName, 0, wxLEFT | wxRIGHT | wxEXPAND, SIDEMARGINS );
 #endif  // SELECTBYRESULTNAME
 
-    bSizer1->AddSpacer(10);
+    bSizer1->AddSpacer(ADJUSTFORYDPI(10));
     
     m_SlideShowArea = new CSlideShowPanel(this);
     m_SlideShowArea->SetMinSize(wxSize(SLIDESHOWWIDTH+(2*SLIDESHOWBORDER), SLIDESHOWHEIGHT+(2*SLIDESHOWBORDER)));
@@ -520,19 +522,19 @@ CSimpleTaskPanel::CSimpleTaskPanel( wxWindow* parent ) :
     
     bSizer1->Add( m_SlideShowArea, 0, wxLEFT | wxRIGHT | wxEXPAND, SIDEMARGINS );
 
-    bSizer1->AddSpacer(10);
+    bSizer1->AddSpacer(ADJUSTFORYDPI(10));
     
     m_ElapsedTimeValue = new CTransparentStaticText( this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxST_NO_AUTORESIZE );
     m_ElapsedTimeValue->Wrap( -1 );
     bSizer1->Add( m_ElapsedTimeValue, 0, wxLEFT | wxRIGHT | wxEXPAND, SIDEMARGINS );
     
-    bSizer1->AddSpacer(7);
+    bSizer1->AddSpacer(ADJUSTFORYDPI(7));
     
     m_TimeRemainingValue = new CTransparentStaticText( this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxST_NO_AUTORESIZE );
     m_TimeRemainingValue->Wrap( -1 );
     bSizer1->Add( m_TimeRemainingValue, 0, wxLEFT | wxRIGHT | wxEXPAND, SIDEMARGINS );
     
-    bSizer1->AddSpacer(7);
+    bSizer1->AddSpacer(ADJUSTFORYDPI(7));
     
     wxBoxSizer* bSizer4;
     bSizer4 = new wxBoxSizer( wxHORIZONTAL );
@@ -545,9 +547,9 @@ CSimpleTaskPanel::CSimpleTaskPanel( wxWindow* parent ) :
     m_ipctDoneX1000 = 100000;
     m_ProgressBar->SetValue( 100 );
     GetTextExtent(wxT("0"), &w, &h);
-    m_ProgressBar->SetMinSize(wxSize(245, h));
+    m_ProgressBar->SetMinSize(wxSize(ADJUSTFORXDPI(245), h));
     m_ProgressBar->SetToolTip(_("This task's progress"));
-    bSizer4->Add( m_ProgressBar, 0, wxRIGHT, 5 );
+    bSizer4->Add( m_ProgressBar, 0, wxRIGHT, ADJUSTFORXDPI(5) );
     
     m_ProgressValueText = new CTransparentStaticText( this, wxID_ANY, wxT("100.000%"), wxDefaultPosition, wxDefaultSize, wxALIGN_RIGHT | wxST_NO_AUTORESIZE );
     m_ProgressValueText->Wrap( -1 );
@@ -555,20 +557,20 @@ CSimpleTaskPanel::CSimpleTaskPanel( wxWindow* parent ) :
     
     bSizer1->Add( bSizer4, 0, wxLEFT | wxRIGHT | wxEXPAND, SIDEMARGINS );
     
-    bSizer1->AddSpacer(7);
+    bSizer1->AddSpacer(ADJUSTFORYDPI(7));
     
     // TODO: Can we determine the longest status string and initialize with it?
     m_StatusValueText = new CTransparentStaticText( this, wxID_ANY, m_sNoProjectsString, wxDefaultPosition, wxDefaultSize, wxST_NO_AUTORESIZE );
     m_StatusValueText->Wrap( -1 );
     bSizer1->Add( m_StatusValueText, 0, wxLEFT | wxRIGHT | wxEXPAND, SIDEMARGINS );
 
-    bSizer1->AddSpacer(7);
+    bSizer1->AddSpacer(ADJUSTFORYDPI(7));
     
     m_TaskCommandsButton = new CSimpleTaskPopupButton( this, ID_TASKSCOMMANDBUTTON, _("Task Commands"), wxDefaultPosition, wxDefaultSize, 0 );
     m_TaskCommandsButton->SetToolTip(_("Pop up a menu of commands to apply to this task"));
     bSizer1->Add( m_TaskCommandsButton, 0, wxLEFT | wxRIGHT | wxEXPAND | wxALIGN_CENTER_HORIZONTAL, SIDEMARGINS );
     
-    bSizer1->AddSpacer(10);
+    bSizer1->AddSpacer(ADJUSTFORYDPI(10));
     
     this->SetSizer( bSizer1 );
     this->Layout();
@@ -1111,9 +1113,7 @@ void CSimpleTaskPanel::UpdateTaskSelectionList(bool reskin) {
     for(j = 0; j < count; ++j) {
         selData = (TaskSelectionData*)m_TaskSelectionCtrl->GetClientData(j);
         ctrlResult = selData->result;
-        if (Suspended() || ctrlResult->suspended_via_gui || ctrlResult->project_suspended_via_gui) {
-            newIcon = suspendedIcon;
-        } else if (isRunning(ctrlResult)) {
+        if (isRunning(ctrlResult)) {
             newIcon = runningIcon;
         } else if (ctrlResult->scheduler_state == CPU_SCHED_PREEMPTED) {
             newIcon = waitingIcon;
@@ -1148,25 +1148,28 @@ void CSimpleTaskPanel::UpdateTaskSelectionList(bool reskin) {
 
 
 bool CSimpleTaskPanel::isRunning(RESULT* result) {
-    bool outcome = false;
 
     // It must be scheduled to be running
-    if ( result->scheduler_state == CPU_SCHED_SCHEDULED ) {
-        // If either the project or task have been suspended, then it cannot be running
-        if ( !result->suspended_via_gui && !result->project_suspended_via_gui ) {
-            CC_STATUS status;
-            CMainDocument*      pDoc = wxGetApp().GetDocument();
-            wxASSERT(pDoc);
-            
-            pDoc->GetCoreClientStatus(status);
-            // Make sure that the core client isn't global suspended for some reason
-            if ( status.task_suspend_reason == 0 || status.task_suspend_reason == SUSPEND_REASON_CPU_THROTTLE ) {
-                outcome = true;
-            }
-        }
+    if ( result->scheduler_state != CPU_SCHED_SCHEDULED ) {
+        return false;
     }
+    // If either the project or task have been suspended, then it cannot be running
+    if (result->suspended_via_gui || result->project_suspended_via_gui ) {
+        return false;
+    }
+    CC_STATUS status;
+    CMainDocument*      pDoc = wxGetApp().GetDocument();
+    wxASSERT(pDoc);
 
-    return outcome;
+    pDoc->GetCoreClientStatus(status);
+    // Make sure that the core client isn't global suspended for some reason
+    if (status.task_suspend_reason == 0 || status.task_suspend_reason == SUSPEND_REASON_CPU_THROTTLE) {
+        return true;
+    }
+    if (result->active_task_state == PROCESS_EXECUTING) {
+        return true;
+    }
+    return false;
 }
 
 

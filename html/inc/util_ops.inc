@@ -38,7 +38,10 @@ function admin_page_head($title) {
 }
 
 function admin_page_tail() {
-    echo "</body></html>\n";
+    echo "
+        <hr><center><a href=index.php>Main page</a></center>\n
+        </body></html>
+    ";
 }
 
 // TODO: get rid of all the following
@@ -94,12 +97,9 @@ function db_init_cli() {
     print "Database password (if any): ";
     $pass = rtrim(fgets($in, 80));
 
-    $retval = mysql_pconnect($host, $user, $pass);
+    $retval = _mysql_connect($host, $user, $pass, $db_name);
     if (!$retval) {
         die("Can't connect to DB\n");
-    }
-    if (!mysql_select_db($db_name)) {
-        die("Can't select DB\n");
     }
 }
 
@@ -113,7 +113,7 @@ function print_login_form_ops($next_url='') {
     row2("Email", "<input name=email_addr size=40>");
     row2("Password", "<input type=password name=passwd size=40>");
     row2(tra("Stay logged in on this computer"), '<input type="checkbox" name="stay_logged_in" checked>');
-    row2("", "<input type=submit value=OK>");
+    row2("", "<input class=\"btn btn-primary\" type=submit value=OK>");
     end_table();
 }
 
@@ -353,6 +353,36 @@ if (isset($cli_only)) {
 
 if (!isset($skip_auth_ops) && array_key_exists("SERVER_PORT", $_SERVER)) {
     auth_ops();
+}
+
+// TODO: use DB interface layer
+//
+function cancel_wus_where($clause) {
+    $q1 = "CREATE TEMPORARY TABLE tmp SELECT id FROM workunit WHERE $clause;";
+    $q2 = "UPDATE result SET server_state=5, outcome=5 WHERE server_state=2 AND workunitid in (SELECT id FROM tmp);";
+    $q3 = "UPDATE workunit SET error_mask=error_mask|16 WHERE id in (SELECT id FROM tmp);";
+    $q4 = "UPDATE workunit SET transition_time=0 WHERE id in (SELECT id FROM tmp);";
+    $q5 = "DROP TABLE tmp;";
+
+    if (!_mysql_query($q1)) {
+        echo "MySQL command '$q1' failed:<br/>unable to create temporary WU id table.<br>\n";
+        return 1;
+    } else if (!_mysql_query($q2)) {
+        echo "MySQL command '$q2' failed:<br/>unable to cancel unsent results.<br>\n";
+        _mysql_query($q5);
+        return 2;
+    } else if (!_mysql_query($q3)) {
+      echo "MySQL command '$q3' failed:<br/>unable to cancel workunits.<br>\n";
+        _mysql_query($q5);
+        return 3;
+    } else if (!_mysql_query($q4)) {
+        echo "MySQL command '$q4' failed:<br/>unable to trigger transitioner.<br>\n";
+        _mysql_query($q5);
+        return 4;
+    } 
+    _mysql_query($q5);
+    echo "Successfully canceled WUs WHERE '$clause'<br>\n";
+    return 0;
 }
 
 $cvs_version_tracker[]="\$Id$";  //Generated automatically - do not edit

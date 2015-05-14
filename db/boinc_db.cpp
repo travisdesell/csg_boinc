@@ -97,6 +97,8 @@ void VDA_CHUNK_HOST::clear() {memset(this, 0, sizeof(*this));}
 void BADGE::clear() {memset(this, 0, sizeof(*this));}
 void BADGE_USER::clear() {memset(this, 0, sizeof(*this));}
 void BADGE_TEAM::clear() {memset(this, 0, sizeof(*this));}
+void CREDIT_USER::clear() {memset(this, 0, sizeof(*this));}
+void CREDIT_TEAM::clear() {memset(this, 0, sizeof(*this));}
 
 DB_PLATFORM::DB_PLATFORM(DB_CONN* dc) :
     DB_BASE("platform", dc?dc:&boinc_db){}
@@ -170,6 +172,10 @@ DB_BADGE_USER::DB_BADGE_USER(DB_CONN* dc) :
     DB_BASE("badge_user", dc?dc:&boinc_db){}
 DB_BADGE_TEAM::DB_BADGE_TEAM(DB_CONN* dc) :
     DB_BASE("badge_team", dc?dc:&boinc_db){}
+DB_CREDIT_USER::DB_CREDIT_USER(DB_CONN* dc) :
+    DB_BASE("credit_user", dc?dc:&boinc_db){}
+DB_CREDIT_TEAM::DB_CREDIT_TEAM(DB_CONN* dc) :
+    DB_BASE("credit_team", dc?dc:&boinc_db){}
 
 int DB_PLATFORM::get_id() {return id;}
 int DB_APP::get_id() {return id;}
@@ -1508,15 +1514,25 @@ int DB_TRANSITIONER_ITEM_SET::enumerate(
     int retval;
     char query[MAX_QUERY_LEN];
     char mod_clause[256];;
+    char time_clause[256];
     MYSQL_ROW row;
     TRANSITIONER_ITEM new_item;
 
     if (!cursor.active) {
+        sprintf(time_clause, " wu.transition_time < %d ", transition_time);
         if (wu_id_modulus) {
-            sprintf(mod_clause,
-                " and wu.id %% %d = %d ",
-                wu_id_modulus, wu_id_remainder
-            );
+            // terrible kludge: if rem >= mod, treat it as a WU ID
+            // This is to support the --wu_id debugging feature
+            //
+            if (wu_id_remainder < wu_id_modulus) {
+                sprintf(mod_clause,
+                    " and wu.id %% %d = %d ",
+                    wu_id_modulus, wu_id_remainder
+                );
+            } else {
+                sprintf(mod_clause, " and wu.id = %u ", wu_id_remainder);
+                strcpy(time_clause, " true ");
+            }
         } else {
             strcpy(mod_clause, "");
         }
@@ -1561,10 +1577,10 @@ int DB_TRANSITIONER_ITEM_SET::enumerate(
             "   workunit AS wu "
             "       LEFT JOIN result AS res ON wu.id = res.workunitid "
             "WHERE "
-            "   wu.transition_time < %d %s and transitioner_flags<>%d "
+            "   %s %s and transitioner_flags<>%d "
             "LIMIT "
             "   %d ",
-            transition_time, mod_clause, TRANSITION_NONE, nresult_limit
+            time_clause, mod_clause, TRANSITION_NONE, nresult_limit
         );
 
         retval = db->do_query(query);
@@ -1734,15 +1750,27 @@ int DB_VALIDATOR_ITEM_SET::enumerate(
 ) {
     int retval;
     char query[MAX_QUERY_LEN], mod_clause[256];
+    char main_clause[256];
     MYSQL_ROW row;
     VALIDATOR_ITEM new_item;
 
     if (!cursor.active) {
+        sprintf(main_clause,
+            " and wu.appid = %d and wu.need_validate > 0 ", appid
+        );
         if (wu_id_modulus) {
-            sprintf(mod_clause,
-                " and wu.id %% %d = %d ",
-                wu_id_modulus, wu_id_remainder
-            );
+            // terrible kludge: if rem >= mod, treat it as a WU ID
+            // This is to support the --wu_id debugging feature
+            //
+            if (wu_id_remainder < wu_id_modulus) {
+                sprintf(mod_clause,
+                    " and wu.id %% %d = %d ",
+                    wu_id_modulus, wu_id_remainder
+                );
+            } else {
+                sprintf(mod_clause, " and wu.id = %u ", wu_id_remainder);
+                strcpy(main_clause, "");
+            }
         } else {
             strcpy(mod_clause, "");
         }
@@ -1796,10 +1824,10 @@ int DB_VALIDATOR_ITEM_SET::enumerate(
             "   res.runtime_outlier "
             "FROM "
             "   workunit AS wu, result AS res where wu.id = res.workunitid "
-            "   and wu.appid = %d and wu.need_validate > 0 %s "
+            "   %s %s "
             "LIMIT "
             "   %d ",
-            appid, mod_clause, nresult_limit
+            main_clause, mod_clause, nresult_limit
         );
 
         retval = db->do_query(query);
@@ -2652,6 +2680,68 @@ void DB_BADGE_TEAM::db_parse(MYSQL_ROW &r) {
     team_id = atoi(r[i++]);
     create_time = atof(r[i++]);
     reassign_time = atof(r[i++]);
+}
+
+void DB_CREDIT_USER::db_print(char* buf) {
+    sprintf(buf,
+        "userid=%d, "
+        "appid=%d, "
+        "njobs=%d, "
+        "total=%.15e, "
+        "expavg=%.15e, "
+        "expavg_time=%.15e, "
+        "credit_type=%d ",
+        userid,
+        appid,
+        njobs,
+        total,
+        expavg,
+        expavg_time,
+        credit_type
+    );
+}
+
+void DB_CREDIT_USER::db_parse(MYSQL_ROW &r) {
+    int i=0;
+    clear();
+    userid = atoi(r[i++]);
+    appid = atoi(r[i++]);
+    njobs = atoi(r[i++]);
+    total = atof(r[i++]);
+    expavg = atof(r[i++]);
+    expavg_time = atof(r[i++]);
+    credit_type = atoi(r[i++]);
+}
+
+void DB_CREDIT_TEAM::db_print(char* buf) {
+    sprintf(buf,
+        "teamid=%d, "
+        "appid=%d, "
+        "njobs=%d, "
+        "total=%.15e, "
+        "expavg=%.15e, "
+        "expavg_time=%.15e, "
+        "credit_type=%d ",
+        teamid,
+        appid,
+        njobs,
+        total,
+        expavg,
+        expavg_time,
+        credit_type
+    );
+}
+
+void DB_CREDIT_TEAM::db_parse(MYSQL_ROW &r) {
+    int i=0;
+    clear();
+    teamid = atoi(r[i++]);
+    appid = atoi(r[i++]);
+    njobs = atoi(r[i++]);
+    total = atof(r[i++]);
+    expavg = atof(r[i++]);
+    expavg_time = atof(r[i++]);
+    credit_type = atoi(r[i++]);
 }
 
 const char *BOINC_RCSID_ac374386c8 = "$Id$";

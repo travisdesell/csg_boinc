@@ -1148,6 +1148,7 @@ void CMainDocument::RunPeriodicRPCs(int frameRefreshRate) {
             request.arg1 = &async_projects_update_buf;
             request.arg2 = &state;
             request.arg3 = &async_results_buf;
+            request.arg4 = &m_ActiveTasksOnly;
             request.exchangeBuf = &results;
             request.rpcType = RPC_TYPE_ASYNC_WITH_REFRESH_AFTER;
             request.completionTime = &m_dtCachedSimpleGUITimestamp;
@@ -1566,7 +1567,7 @@ RUNNING_GFX_APP* CMainDocument::GetRunningGraphicsApp(
     
     for( gfx_app_iter = m_running_gfx_apps.begin(); 
         gfx_app_iter != m_running_gfx_apps.end(); 
-        gfx_app_iter++
+        ++gfx_app_iter
     ) {
          if ((slot >= 0) && ((*gfx_app_iter).slot != slot)) continue;
 
@@ -2390,7 +2391,7 @@ int CMainDocument::CachedSimpleGUIUpdate(bool bForce) {
     if (m_dtCachedSimpleGUITimestamp.IsEqualTo(wxDateTime((time_t)0))) bForce = true;
     if (bForce) {
         m_dtCachedSimpleGUITimestamp = wxDateTime::Now();
-        m_iGet_simple_gui2_rpc_result = rpc.get_simple_gui_info(async_projects_update_buf, state, results);
+        m_iGet_simple_gui2_rpc_result = rpc.get_simple_gui_info(async_projects_update_buf, state, results, m_ActiveTasksOnly);
     }
 
     if (m_iGet_simple_gui2_rpc_result) {
@@ -2499,29 +2500,22 @@ wxString result_description(RESULT* result, bool show_resources) {
             strBuffer += _("Project suspended by user");
         } else if (result->suspended_via_gui) {
             strBuffer += _("Task suspended by user");
-        } else if (status.task_suspend_reason && !throttled) {
+        } else if (status.task_suspend_reason && !throttled && result->active_task_state != PROCESS_EXECUTING) {
+            // an NCI process can be running even though computation is suspended
+            // (because of <dont_suspend_nci>
+            //
             strBuffer += _("Suspended - ");
             strBuffer += suspend_reason_wxstring(status.task_suspend_reason);
-            if (strlen(result->resources) && show_resources) {
-                strBuffer += wxString(wxT(" (")) + wxString(result->resources, wxConvUTF8) + wxString(wxT(")"));
-            }
         } else if (status.gpu_suspend_reason && uses_gpu(result)) {
             strBuffer += _("GPU suspended - ");
             strBuffer += suspend_reason_wxstring(status.gpu_suspend_reason);
-            if (strlen(result->resources) && show_resources) {
-                strBuffer += wxString(wxT(" (")) + wxString(result->resources, wxConvUTF8) + wxString(wxT(")"));
-            }
         } else if (result->active_task) {
             if (result->too_large) {
                 strBuffer += _("Waiting for memory");
             } else if (result->needs_shmem) {
                 strBuffer += _("Waiting for shared memory");
             } else if (result->scheduler_state == CPU_SCHED_SCHEDULED) {
-                if (result->edf_scheduled) {
-                    strBuffer += _("Running, high priority");
-                } else {
-                    strBuffer += _("Running");
-                }
+                strBuffer += _("Running");
                 if (project && project->non_cpu_intensive) {
                     strBuffer += _(" (non-CPU-intensive)");
                 }
@@ -2530,23 +2524,19 @@ wxString result_description(RESULT* result, bool show_resources) {
             } else if (result->scheduler_state == CPU_SCHED_UNINITIALIZED) {
                 strBuffer += _("Ready to start");
             }
-            if (strlen(result->resources)>1 && show_resources) {
-                strBuffer += wxString(wxT(" (")) + wxString(result->resources, wxConvUTF8) + wxString(wxT(")"));
-            }
         } else {
             strBuffer += _("Ready to start");
         }
         if (result->scheduler_wait) {
             if (strlen(result->scheduler_wait_reason)) {
-                strBuffer += _(" (Scheduler wait: ");
+                strBuffer = _("Postponed: ");
                 strBuffer += wxString(result->scheduler_wait_reason, wxConvUTF8);
-                strBuffer += _(")");
             } else {
-                strBuffer += _(" (Scheduler wait)");
+                strBuffer = _("Postponed");
             }
         }
         if (result->network_wait) {
-            strBuffer += _(" (Waiting for network access)");
+            strBuffer = _("Waiting for network access");
         }
         break;
     case RESULT_COMPUTE_ERROR:
@@ -2576,7 +2566,7 @@ wxString result_description(RESULT* result, bool show_resources) {
             strBuffer += _("Aborted: not started by deadline");
             break;
         case EXIT_DISK_LIMIT_EXCEEDED:
-            strBuffer += _("Aborted: disk limit exceeded");
+            strBuffer += _("Aborted: task disk limit exceeded");
             break;
         case EXIT_TIME_LIMIT_EXCEEDED:
             strBuffer += _("Aborted: run time limit exceeded");
@@ -2597,6 +2587,9 @@ wxString result_description(RESULT* result, bool show_resources) {
             strBuffer.Format(_("Error: invalid state '%d'"), result->state);
         }
         break;
+    }
+    if (strlen(result->resources)>1 && show_resources) {
+        strBuffer += wxString(wxT(" (")) + wxString(result->resources, wxConvUTF8) + wxString(wxT(")"));
     }
     return strBuffer;
 }
@@ -2626,12 +2619,65 @@ static void hsv2rgb(
 void color_cycle(int i, int n, wxColour& color) {
     double h = (double)i/(double)n;
     double r, g, b;
-    double v = .6;
-    if (n > 6) v = .5 + (i % 3)*.125;
+    double v = .75;
+    if (n > 6) v = .6 + (i % 3)*.1;
         // cycle through 3 different brightnesses
     hsv2rgb(h*6, .5, v, r, g, b);
     unsigned char cr = (unsigned char) (r*256);
     unsigned char cg = (unsigned char) (g*256);
     unsigned char cb = (unsigned char) (b*256);
     color = wxColour(cr, cg, cb);
+}
+
+#ifdef __WXMSW__
+static float XDPIScaleFactor = 0.0;
+static float YDPIScaleFactor = 0.0;
+
+void GetDPIScaling() {
+	XDPIScaleFactor = 1.0;
+	YDPIScaleFactor = 1.0;
+	// SetProcessDPIAware() requires Windows Vista or later
+	HMODULE hUser32 = LoadLibrary(_T("user32.dll"));
+	typedef BOOL (*SetProcessDPIAwareFunc)();
+	SetProcessDPIAwareFunc setDPIAware = (SetProcessDPIAwareFunc)GetProcAddress(hUser32, "SetProcessDPIAware");
+	if (setDPIAware) {
+		setDPIAware();
+		HWND hWnd = GetForegroundWindow();
+		HDC hdc = GetDC(hWnd);
+		XDPIScaleFactor = GetDeviceCaps(hdc, LOGPIXELSX) / 96.0f;
+		YDPIScaleFactor = GetDeviceCaps(hdc, LOGPIXELSY) / 96.0f;
+		ReleaseDC(hWnd, hdc);
+	}
+	FreeLibrary(hUser32);
+}
+
+float GetXDPIScaling() {
+	if (XDPIScaleFactor == 0.0) {
+		GetDPIScaling();
+	}
+	return XDPIScaleFactor;
+}
+
+float GetYDPIScaling() {
+	if (YDPIScaleFactor == 0.0) {
+		GetDPIScaling();
+	}
+	return YDPIScaleFactor;
+}
+#endif
+
+// TODO: Choose from multiple size images if provided, else resize the closest one
+wxBitmap GetScaledBitmapFromXPMData(const char** XPMData) {
+#ifdef __WXMSW__
+    if ((GetXDPIScaling() > 1.05) || (GetYDPIScaling() > 1.05)) {
+        wxImage img = wxImage(XPMData);
+        img.Rescale((int) (img.GetWidth()*GetXDPIScaling()), 
+                    (int) (img.GetHeight()*GetYDPIScaling()), 
+                    wxIMAGE_QUALITY_BILINEAR
+                );
+        wxBitmap *bm = new wxBitmap(img);
+        return *bm;
+    }
+#endif
+    return wxBitmap(XPMData);
 }

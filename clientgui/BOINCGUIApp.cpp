@@ -370,6 +370,8 @@ bool CBOINCGUIApp::OnInit() {
     m_pDocument = NULL;
     m_pTaskBarIcon = NULL;
     m_pEventLog = NULL;
+    m_bEventLogWasActive = false;
+    m_bProcessingActivateAppEvent = false;
 #ifdef __WXMAC__
     m_pMacDockIcon = NULL;
 #endif
@@ -412,6 +414,8 @@ bool CBOINCGUIApp::OnInit() {
     wxSystemOptions::SetOption(wxT("msw.staticbox.optimized-paint"), 0);
 #endif
 #ifdef __WXMAC__
+    bool launchedFromLogin = false;
+    
     // In wxMac-2.8.7, default wxListCtrl::RefreshItem() does not work
     // so use traditional generic implementation.
     // This has been fixed in wxMac-2.8.8, but the Mac native implementation:
@@ -645,6 +649,36 @@ bool CBOINCGUIApp::OnInit() {
     }
 #endif
 
+#ifdef __WXMAC__
+    ProcessSerialNumber psn;
+    ProcessInfoRec pInfo;
+    OSStatus err;
+    
+    memset(&pInfo, 0, sizeof(pInfo));
+    pInfo.processInfoLength = sizeof( ProcessInfoRec );
+    err = GetProcessInformation(&m_psnCurrentProcess, &pInfo);
+    if (!err) {
+        psn = pInfo.processLauncher;
+        memset(&pInfo, 0, sizeof(pInfo));
+        pInfo.processInfoLength = sizeof( ProcessInfoRec );
+        err = GetProcessInformation(&psn, &pInfo);
+    }
+    // Don't open main window if we were started automatically at login
+    if (pInfo.processSignature == 'lgnw') {  // Login Window app
+        launchedFromLogin = true;
+        
+        // Prevent a situation where wxSingleInstanceChecker lock file
+        // from last login auto start (with same pid) was not deleted.
+        // This path must match that in DetectDuplicateInstance()
+        wxString lockFilePath = wxString(wxFileName::GetHomeDir() +
+                                            "/Library/Application Support/BOINC/" +
+                                            wxTheApp->GetAppName() +
+                                            '-' + wxGetUserId()
+                                        );
+        boinc_delete_file(lockFilePath.utf8_str());
+    }
+#endif
+
     // Detect if BOINC Manager is already running, if so, bring it into the
     // foreground and then exit.
     if (DetectDuplicateInstance()) {
@@ -693,21 +727,7 @@ bool CBOINCGUIApp::OnInit() {
     IdleTrackerAttach();
     
 #ifdef __WXMAC__
-    ProcessSerialNumber psn;
-    ProcessInfoRec pInfo;
-    OSStatus err;
-    
-    memset(&pInfo, 0, sizeof(pInfo));
-    pInfo.processInfoLength = sizeof( ProcessInfoRec );
-    err = GetProcessInformation(&m_psnCurrentProcess, &pInfo);
-    if (!err) {
-        psn = pInfo.processLauncher;
-        memset(&pInfo, 0, sizeof(pInfo));
-        pInfo.processInfoLength = sizeof( ProcessInfoRec );
-        err = GetProcessInformation(&psn, &pInfo);
-    }
-    // Don't open main window if we were started automatically at login
-    if (pInfo.processSignature == 'lgnw') {  // Login Window app
+    if (launchedFromLogin) {
         m_bGUIVisible = false;
 
         // If the system was just started, we usually get a "Connection
@@ -818,6 +838,16 @@ int CBOINCGUIApp::OnExit() {
 // Ensure we shut down gracefully on Windows logout or shutdown
 void CBOINCGUIApp::OnEndSession(wxCloseEvent& ) {
     s_bSkipExitConfirmation = true;
+
+    // On Windows Vista with UAC turned on, we have to spawn a new process to change the
+    // state of a service.  When Windows is shutting down it'll prevent new processes from
+    // being created.  Sometimes it'll present a crash dialog for the newly spawned application.
+    //
+    // So, we will just let the OS shutdown the service via the service control manager.
+    //
+    if (m_iShutdownCoreClient && m_pDocument->m_pClientManager->IsBOINCConfiguredAsDaemon()) {
+        m_iShutdownCoreClient = false;
+    }
 
     CBOINCBaseFrame* pFrame = wxGetApp().GetFrame();
     wxCommandEvent evt(wxEVT_COMMAND_MENU_SELECTED, wxID_EXIT);
@@ -1163,26 +1193,38 @@ int CBOINCGUIApp::IdleTrackerDetach() {
 
 
 void CBOINCGUIApp::OnActivateApp(wxActivateEvent& event) {
-#ifdef __WXMAC__
-    // Make sure any modal dialog (such as Attach Wizard) ends up in front.
-    if (IsModalDialogDisplayed()) {
-        event.Skip();
-        return;
-    }
-#endif
+    m_bProcessingActivateAppEvent = true;
 
     if (event.GetActive()) {
-        if (m_pEventLog && !m_pEventLog->IsIconized()) {
-            m_pEventLog->Raise();
-        }
-        if (m_pFrame) {
-            m_pFrame->Raise();
-        }
 #ifdef __WXMAC__
         ShowInterface();
+#else
+#ifdef __WXGTK__
+        // Linux allows the Event Log to be brought forward and made active
+        // even if we have a modal dialog displayed (associated with our
+        // main frame.) This test is needed to allow bringing the modal
+        // dialog forward again by clicking on its title bar.
+        if (!IsModalDialogDisplayed())
+#endif
+        {
+            bool keepEventLogInFront = m_bEventLogWasActive;
+            
+            if (m_pEventLog && !m_pEventLog->IsIconized() && !keepEventLogInFront) {
+                m_pEventLog->Raise();
+            }
+            if (m_pFrame) {
+                m_pFrame->Raise();
+            }
+            if (m_pEventLog && !m_pEventLog->IsIconized() && keepEventLogInFront) {
+                m_pEventLog->Raise();
+            }
+        }
 #endif
     }
+
     event.Skip();
+    
+    m_bProcessingActivateAppEvent = false;
 }
 
 
@@ -1235,8 +1277,11 @@ int CBOINCGUIApp::StartBOINCDefaultScreensaverTest() {
 }
 
 
-// Display the Event Log, it is a modeless dialog not owned by any
-// other UI element.
+// Display the Event Log, it is a modeless dialog not owned by
+// any other UI element.
+// To work around a Linux bug in wxWidgets 3.0 which prevents
+// bringing the main frame forward on top of a modeless dialog,
+// the Event Log is now a wxFrame on Linux only.
 void CBOINCGUIApp::DisplayEventLog(bool bShowWindow) {
     if (m_pEventLog) {
         if (bShowWindow) {
@@ -1394,26 +1439,28 @@ bool CBOINCGUIApp::SetActiveGUI(int iGUISelection, bool bShowWindow) {
     }
 
     // Show the new frame if needed 
-    if (m_pFrame && bShowWindow) {
-        if (m_pEventLog) {
-            m_pEventLog->Show();
-            m_pEventLog->Raise();
+    if (!m_bProcessingActivateAppEvent) {
+        if (m_pFrame && bShowWindow) {
+            if (m_pEventLog && !m_pEventLog->IsIconized()) {
+                m_pEventLog->Show();
+                m_pEventLog->Raise();
+    #ifdef __WXMSW__
+                ::SetForegroundWindow((HWND)m_pEventLog->GetHWND());
+    #endif
+            }
+
+            if (!m_pFrame->IsShown()) {
+                m_pFrame->Show();
+            }
+            if (m_pFrame->IsIconized()) {
+                m_pFrame->Maximize(false);
+            }
+            m_pFrame->Raise();
+
 #ifdef __WXMSW__
-            ::SetForegroundWindow((HWND)m_pEventLog->GetHWND());
+            ::SetForegroundWindow((HWND)m_pFrame->GetHWND());
 #endif
         }
-
-        if (!m_pFrame->IsShown()) {
-            m_pFrame->Show();
-        }
-        if (m_pFrame->IsIconized()) {
-            m_pFrame->Maximize(false);
-        }
-        m_pFrame->Raise();
-
-#ifdef __WXMSW__
-        ::SetForegroundWindow((HWND)m_pFrame->GetHWND());
-#endif
     }
 
     wxLogTrace(wxT("Function Start/End"), wxT("CBOINCGUIApp::SetActiveGUI - Function End"));

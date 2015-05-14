@@ -67,6 +67,7 @@ struct SCHED_CONFIG {
     bool verify_files_on_app_start;
     int homogeneous_redundancy;
     bool hr_allocate_slots;
+    bool hr_class_static;
     bool ignore_upload_certificates;
     bool dont_generate_upload_certificates;
     int uldl_dir_fanout;        // fanout of ul/dl dirs; 0 if none
@@ -177,6 +178,8 @@ struct SCHED_CONFIG {
     bool estimate_flops_from_hav_pfc;
         // Use host_app_version peak flop count rather than elapsed time 
         // to calculate projected_flops when choosing version.
+    bool credit_by_app;
+        // store per-app credit info in credit_user and credit_team
 
     // time intervals
     double maintenance_delay;

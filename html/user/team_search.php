@@ -53,14 +53,20 @@ function compare($t1, $t2) {
 // Sort list by decreasing refcnt
 //
 function sort_list(&$list) {
-    foreach ($list as $a=>$b) $b->rnd = rand();
+    foreach ($list as $a=>$b) {
+        $b->rnd = rand();
+    }
     usort($list, 'compare');
 }
 
 function get_teams($clause, $active) {
     $c2 = '';
     if ($active) $c2 = "and expavg_credit>0.1";
-    return BoincTeam::enum("$clause $c2 order by expavg_credit desc limit 20");
+    $x = BoincTeam::enum("$clause $c2 order by expavg_credit desc limit 20");
+    foreach ($x as $t) {
+        $t->refcnt = 0;
+    }
+    return $x;
 }
 
 function show_list($list) {
@@ -93,7 +99,7 @@ function show_list($list) {
             echo "</td>\n";
         }
         echo "
-            <td><span class=note>".sanitize_html($team->description)."</span></td>
+            <td><p class=\"text-muted\">".sanitize_html($team->description)."</p></td>
             <td>".format_credit($team->expavg_credit)."</td>
             <td>$type</td>
             <td>$team->country</td>

@@ -153,57 +153,6 @@ static void show_exclude_gpu(EXCLUDE_GPU& e) {
 //
 void CC_CONFIG::show() {
     unsigned int i;
-    if (ncpus>0) {
-        msg_printf(NULL, MSG_INFO, "Config: simulate %d CPUs", cc_config.ncpus);
-    }
-    if (no_gpus) {
-        msg_printf(NULL, MSG_INFO, "Config: don't use coprocessors");
-    }
-    if (no_info_fetch) {
-        msg_printf(NULL, MSG_INFO, "Config: don't fetch project list or client version info");
-    }
-    if (no_priority_change) {
-        msg_printf(NULL, MSG_INFO, "Config: run apps at regular priority");
-    }
-    if (report_results_immediately) {
-        msg_printf(NULL, MSG_INFO, "Config: report completed tasks immediately");
-    }
-    if (use_all_gpus) {
-        msg_printf(NULL, MSG_INFO, "Config: use all coprocessors");
-    }
-    if (fetch_minimal_work) {
-        msg_printf(NULL, MSG_INFO, "Config: fetch minimal work");
-    }
-    if (max_event_log_lines != DEFAULT_MAX_EVENT_LOG_LINES) {
-        if (max_event_log_lines) {
-            msg_printf(NULL, MSG_INFO,
-                "Config: event log limit %d lines", max_event_log_lines
-            );
-        } else {
-            msg_printf(NULL, MSG_INFO, "Config: event log limit disabled");
-        }
-    }
-    if (fetch_on_update) {
-        msg_printf(NULL, MSG_INFO, "Config: fetch on update");
-    }
-    for (int j=1; j<NPROC_TYPES; j++) {
-        show_gpu_ignore(ignore_gpu_instance[j], j);
-    }
-    for (i=0; i<exclude_gpus.size(); i++) {
-        show_exclude_gpu(exclude_gpus[i]);
-    }
-    for (i=0; i<exclusive_apps.size(); i++) {
-        msg_printf(NULL, MSG_INFO,
-            "Config: don't compute while %s is running",
-            exclusive_apps[i].c_str()
-        );
-    }
-    for (i=0; i<exclusive_gpu_apps.size(); i++) {
-        msg_printf(NULL, MSG_INFO,
-            "Config: don't use GPUs while %s is running",
-            exclusive_gpu_apps[i].c_str()
-        );
-    }
     if (allow_remote_gui_rpc) {
         msg_printf(NULL, MSG_INFO,
             "Config: GUI RPC allowed from any host"
@@ -225,6 +174,72 @@ void CC_CONFIG::show() {
         }
         fclose(f);
     }
+    if (disallow_attach) {
+        msg_printf(NULL, MSG_INFO, "Config: disallow project attach");
+    }
+    if (dont_check_file_sizes) {
+        msg_printf(NULL, MSG_INFO, "Config: don't check file sizes");
+    }
+    if (dont_suspend_nci) {
+        msg_printf(NULL, MSG_INFO, "Config: don't suspend NCI tasks");
+    }
+    if (dont_use_vbox) {
+        msg_printf(NULL, MSG_INFO, "Config: don't use VirtualBox");
+    }
+    for (i=0; i<exclude_gpus.size(); i++) {
+        show_exclude_gpu(exclude_gpus[i]);
+    }
+    for (i=0; i<exclusive_apps.size(); i++) {
+        msg_printf(NULL, MSG_INFO,
+            "Config: don't compute while %s is running",
+            exclusive_apps[i].c_str()
+        );
+    }
+    for (i=0; i<exclusive_gpu_apps.size(); i++) {
+        msg_printf(NULL, MSG_INFO,
+            "Config: don't use GPUs while %s is running",
+            exclusive_gpu_apps[i].c_str()
+        );
+    }
+    if (fetch_minimal_work) {
+        msg_printf(NULL, MSG_INFO, "Config: fetch minimal work");
+    }
+    if (fetch_on_update) {
+        msg_printf(NULL, MSG_INFO, "Config: fetch on update");
+    }
+    if (http_1_0) {
+        msg_printf(NULL, MSG_INFO, "Config: use HTTP 1.0");
+    }
+    for (int j=1; j<NPROC_TYPES; j++) {
+        show_gpu_ignore(ignore_gpu_instance[j], j);
+    }
+    if (max_event_log_lines != DEFAULT_MAX_EVENT_LOG_LINES) {
+        if (max_event_log_lines) {
+            msg_printf(NULL, MSG_INFO,
+                "Config: event log limit %d lines", max_event_log_lines
+            );
+        } else {
+            msg_printf(NULL, MSG_INFO, "Config: event log limit disabled");
+        }
+    }
+    if (ncpus>0) {
+        msg_printf(NULL, MSG_INFO, "Config: simulate %d CPUs", cc_config.ncpus);
+    }
+    if (no_gpus) {
+        msg_printf(NULL, MSG_INFO, "Config: don't use coprocessors");
+    }
+    if (no_info_fetch) {
+        msg_printf(NULL, MSG_INFO, "Config: don't fetch project list or client version info");
+    }
+    if (no_priority_change) {
+        msg_printf(NULL, MSG_INFO, "Config: run apps at regular priority");
+    }
+    if (report_results_immediately) {
+        msg_printf(NULL, MSG_INFO, "Config: report completed tasks immediately");
+    }
+    if (use_all_gpus) {
+        msg_printf(NULL, MSG_INFO, "Config: use all coprocessors");
+    }
     if (vbox_window) {
         msg_printf(NULL, MSG_INFO,
             "Config: open console window for VirtualBox applications"
@@ -245,7 +260,6 @@ void CC_CONFIG::show() {
 // (It's separate so that we can write messages in it)
 
 int CC_CONFIG::parse_options_client(XML_PARSER& xp) {
-    char path[MAXPATHLEN];
     string s;
     int n, retval;
 
@@ -299,6 +313,7 @@ int CC_CONFIG::parse_options_client(XML_PARSER& xp) {
                 msg_printf_notice(NULL, false, NULL,
                     "Can't parse <coproc> element in cc_config.xml"
                 );
+                continue;
             }
             retval = config_coprocs.add(c);
             if (retval) {
@@ -308,16 +323,11 @@ int CC_CONFIG::parse_options_client(XML_PARSER& xp) {
             }
             continue;
         }
-        if (xp.parse_str("data_dir", path, sizeof(path))) {
-            if (chdir(path)) {
-                perror("chdir");
-                exit(1);
-            }
-            continue;
-        }
         if (xp.parse_bool("disallow_attach", disallow_attach)) continue;
         if (xp.parse_bool("dont_check_file_sizes", dont_check_file_sizes)) continue;
         if (xp.parse_bool("dont_contact_ref_site", dont_contact_ref_site)) continue;
+        if (xp.parse_bool("dont_suspend_nci", dont_suspend_nci)) continue;
+        if (xp.parse_bool("dont_use_vbox", dont_use_vbox)) continue;
         if (xp.match_tag("exclude_gpu")) {
             EXCLUDE_GPU eg;
             retval = eg.parse(xp);
@@ -521,19 +531,6 @@ int read_config_file(bool init, const char* fname) {
 
     if (init) {
         coprocs = cc_config.config_coprocs;
-        if (strlen(cc_config.data_dir)) {
-#ifdef _WIN32
-            _chdir(cc_config.data_dir);
-#else
-            if (chdir(cc_config.data_dir)) {
-                msg_printf(NULL, MSG_INFO,
-                    "Couldn't change to directory specified in cc_config.xml: %s",
-                    cc_config.data_dir
-                );
-                return ERR_OPENDIR;
-            }
-#endif
-        }
     } else {
         select_proxy_info();        // in case added or removed proxy info
     }
@@ -609,7 +606,9 @@ void process_gpu_exclusions() {
         APP* app = gstate.apps[i];
         for (int k=1; k<coprocs.n_rsc; k++) {
             COPROC& cp = coprocs.coprocs[k];
-            app->non_excluded_instances[k] = (1<<cp.count)-1;  // all 1's
+            for (int h=0; h<cp.count; h++) {
+                app->non_excluded_instances[k] |= ((COPROC_INSTANCE_BITMAP)1)<<h;
+            }
         }
     }
 
@@ -617,18 +616,23 @@ void process_gpu_exclusions() {
         p = gstate.projects[i];
         for (int k=1; k<coprocs.n_rsc; k++) {
             COPROC& cp = coprocs.coprocs[k];
-            int all_instances = (1<<cp.count)-1;  // bitmap of 1 for all inst
+            COPROC_INSTANCE_BITMAP all_instances = 0;
+            // bitmap of 1 for all instances
+            //
+            for (int h=0; h<cp.count; h++) {
+                all_instances |= ((COPROC_INSTANCE_BITMAP)1)<<h;
+            }
             for (j=0; j<cc_config.exclude_gpus.size(); j++) {
                 EXCLUDE_GPU& eg = cc_config.exclude_gpus[j];
                 if (!eg.type.empty() && (eg.type != cp.type)) continue;
                 if (strcmp(eg.url.c_str(), p->master_url)) continue;
-                int mask;
+                COPROC_INSTANCE_BITMAP mask;
                 if (eg.device_num >= 0) {
                     int index = cp.device_num_index(eg.device_num);
                     // exclusion may refer to nonexistent GPU
                     //
                     if (index < 0) continue;
-                    mask = 1<<index;
+                    mask = ((COPROC_INSTANCE_BITMAP)1)<<index;
                 } else {
                     mask = all_instances;
                 }
@@ -669,7 +673,7 @@ void process_gpu_exclusions() {
             //
             p->rsc_pwf[k].ncoprocs_excluded = 0;
             for (int b=0; b<cp.count; b++) {
-                int mask = 1<<b;
+                COPROC_INSTANCE_BITMAP mask = ((COPROC_INSTANCE_BITMAP)1)<<b;
                 for (a=0; a<gstate.apps.size(); a++) {
                     APP* app = gstate.apps[a];
                     if (app->project != p) continue;
@@ -722,4 +726,39 @@ bool gpu_excluded(APP* app, COPROC& cp, int ind) {
         return true;
     }
     return false;
+}
+
+// if the configuration file disallows the use of a GPU type
+// for a project, set a flag to that effect
+//
+void set_no_rsc_config() {
+    for (unsigned int i=0; i<gstate.projects.size(); i++) {
+        PROJECT& p = *gstate.projects[i];
+        for (int j=1; j<coprocs.n_rsc; j++) {
+            bool allowed[MAX_COPROC_INSTANCES];
+            memset(allowed, 0, sizeof(allowed));
+            COPROC& c = coprocs.coprocs[j];
+            for (int k=0; k<c.count; k++) {
+                allowed[c.device_nums[k]] = true;
+            }
+            for (unsigned int k=0; k<cc_config.exclude_gpus.size(); k++) {
+                EXCLUDE_GPU& e = cc_config.exclude_gpus[k];
+                if (strcmp(e.url.c_str(), p.master_url)) continue;
+                if (!e.type.empty() && strcmp(e.type.c_str(), c.type)) continue;
+                if (!e.appname.empty()) continue;
+                if (e.device_num < 0) {
+                    memset(allowed, 0, sizeof(allowed));
+                    break;
+                }
+                allowed[e.device_num] = false;
+            }
+            p.no_rsc_config[j] = true;
+            for (int k=0; k<c.count; k++) {
+                if (allowed[c.device_nums[k]]) {
+                    p.no_rsc_config[j] = false;
+                    break;
+                }
+            }
+        }
+    }
 }

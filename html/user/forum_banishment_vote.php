@@ -51,7 +51,8 @@ if (get_str('action')=="start") {
     if (!$user) {
         error_page(tra("No user with this ID found."));
     }
-    $x = $user->banished_until;
+    BoincForumPrefs::lookup($user);
+    $x = $user->prefs->banished_until;
     if ($x>time()) {
         error_page(tra("User is already banished"));
     }
@@ -73,7 +74,7 @@ row2(tra("Reason")."<br>".tra("Mailed if nonempty"),
 
 row2(
     "",
-    "<input type=\"submit\" name=\"submit\" value=\"".tra("Proceed with vote")."\">"
+    "<input class=\"btn btn-default\" type=\"submit\" name=\"submit\" value=\"".tra("Proceed with vote")."\">"
 );
 } elseif (get_str('action')=="yes") {
     vote_yes($config,$logged_in_user,$user);

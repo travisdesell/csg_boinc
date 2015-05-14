@@ -534,8 +534,11 @@ public class Monitor extends Service {
 				// set Android model as hostinfo
 				// should output something like "Samsung Galaxy SII - SDK:15 ABI:armeabi-v7a"
 				String model = Build.MANUFACTURER + " " + Build.MODEL + " - SDK:" + Build.VERSION.SDK_INT + " ABI: " + Build.CPU_ABI;
+				String version = Build.VERSION.RELEASE;
 				if(Logging.DEBUG) Log.d(Logging.TAG,"reporting hostinfo model name: " + model);
-				clientInterface.setHostInfo(model);
+				if(Logging.DEBUG) Log.d(Logging.TAG,"reporting hostinfo os name: Android");
+				if(Logging.DEBUG) Log.d(Logging.TAG,"reporting hostinfo os version: " + version);
+				clientInterface.setHostInfo(model, version);
 				
 				init = true;
 			} catch(Exception e) {if(Logging.ERROR) Log.e(Logging.TAG,"Monitor.clientSetup() init failed: " + e.getMessage());}
@@ -975,12 +978,12 @@ public class Monitor extends Service {
 		}
 		
 		@Override
-		public List<Message> getMessages(int seq) throws RemoteException {
+		public List<edu.berkeley.boinc.rpc.Message> getMessages(int seq) throws RemoteException {
 			return clientInterface.getMessages(seq);
 		}
 		
 		@Override
-		public List<Message> getEventLogMessages(int seq, int num)
+		public List<edu.berkeley.boinc.rpc.Message> getEventLogMessages(int seq, int num)
 				throws RemoteException {
 			return clientInterface.getEventLogMessages(seq, num);
 		}

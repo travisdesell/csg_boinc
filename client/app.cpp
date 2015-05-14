@@ -166,7 +166,7 @@ int ACTIVE_TASK::preempt(int preempt_type, int reason) {
     case REMOVE_MAYBE_SCHED:
         // GPU jobs: always remove from mem, since it's tying up GPU RAM
         //
-        if (result->uses_coprocs()) {
+        if (result->uses_gpu()) {
             remove = true;
             break;
         }
@@ -293,7 +293,7 @@ void ACTIVE_TASK_SET::free_mem() {
 
 bool app_running(PROC_MAP& pm, const char* p) {
     PROC_MAP::iterator i;
-    for (i=pm.begin(); i!=pm.end(); i++) {
+    for (i=pm.begin(); i!=pm.end(); ++i) {
         PROCINFO& pi = i->second;
         //msg_printf(0, MSG_INFO, "running: [%s]", pi.command);
         if (!strcasecmp(pi.command, p)) {
@@ -303,20 +303,27 @@ bool app_running(PROC_MAP& pm, const char* p) {
     return false;
 }
 
-#if 0  // debugging
-void procinfo_show(PROCINFO& pi, PROC_MAP& pm) {
-    unsigned int i;
-    memset(&pi, 0, sizeof(pi));
+#if 1  // debugging
+void procinfo_show(PROC_MAP& pm) {
+    PROCINFO pi;
+    pi.clear();
     PROC_MAP::iterator i;
     for (i=pm.begin(); i!=pm.end(); i++) {
         PROCINFO& p = i->second;
 
+        msg_printf(NULL, MSG_INFO, "%d %s: boinc? %d low_pri %d (u%f k%f)",
+            p.id, p.command, p.is_boinc_app, p.is_low_priority,
+            p.user_time, p.kernel_time
+        );
+#ifdef _WIN32
+        if (p.id == 0) continue;
+#endif
+        if (p.is_boinc_app) continue;
+        if (p.is_low_priority) continue;
         pi.kernel_time += p.kernel_time;
         pi.user_time += p.user_time;
-        msg_printf(NULL, MSG_INFO, "%d %s: boinc %d low %d (%f %f) total (%f %f)",
-            p.id, p.command, p.is_boinc_app, p.is_low_priority, p.kernel_time, p.user_time, pi.kernel_time, pi.user_time
-        );
     }
+    msg_printf(NULL, MSG_INFO, "non-boinc: u%f k%f", pi.user_time, pi.kernel_time);
 }
 #endif
 
@@ -453,9 +460,9 @@ void ACTIVE_TASK_SET::get_memory_usage() {
     // so they're not useful for detecting paging/thrashing.
     //
     PROCINFO pi;
-    //procinfo_show(pi, pm);
     procinfo_non_boinc(pi, pm);
     if (log_flags.mem_usage_debug) {
+        //procinfo_show(pm);
         msg_printf(NULL, MSG_INFO,
             "[mem_usage] All others: WS %.2fMB, swap %.2fMB, user %.3fs, kernel %.3fs",
             pi.working_set_size/MEGA, pi.swap_size/MEGA,
@@ -546,26 +553,40 @@ bool ACTIVE_TASK_SET::is_slot_dir_in_use(char* dir) {
     return false;
 }
 
-// Get a free slot,
-// and make a slot dir if needed
+// Get a free slot:
+// either find an unused an empty slot dir,
+// or create a new slot dir if needed
 //
 int ACTIVE_TASK::get_free_slot(RESULT* rp) {
 #ifndef SIM
     int j, retval;
     char path[MAXPATHLEN];
 
+    // scan slot numbers: slots/0, slots/1, etc.
+    //
     for (j=0; ; j++) {
+        // skip slots that are in use by existing jobs
+        //
         if (gstate.active_tasks.is_slot_in_use(j)) continue;
 
-        // make sure we can make an empty directory for this slot
-        //
         get_slot_dir(j, path, sizeof(path));
         if (boinc_file_exists(path)) {
             if (is_dir(path)) {
+                // If the directory exists, try to clean it out.
+                // If this succeeds, use it.
+                //
                 retval = client_clean_out_dir(path, "get_free_slot()");
                 if (!retval) break;
+                if (log_flags.slot_debug) {
+                    msg_printf(rp->project, MSG_INFO,
+                        "[slot] failed to clean out dir: %s",
+                        boincerror(retval)
+                    );
+                }
             }
         } else {
+            // directory doesn't exist - create one
+            //
             retval = make_slot_dir(j);
             if (!retval) break;
         }
@@ -581,7 +602,9 @@ int ACTIVE_TASK::get_free_slot(RESULT* rp) {
     }
     slot = j;
     if (log_flags.slot_debug) {
-        msg_printf(rp->project, MSG_INFO, "[slot] assigning slot %d to %s", j, rp->name);
+        msg_printf(rp->project, MSG_INFO,
+            "[slot] assigning slot %d to %s", j, rp->name
+        );
     }
 #endif
     return 0;
@@ -1105,7 +1128,10 @@ void* throttler(void*) {
 
     while (1) {
         client_mutex.lock();
-        if (gstate.tasks_suspended || gstate.global_prefs.cpu_usage_limit > 99) {
+        if (gstate.tasks_suspended
+            || gstate.global_prefs.cpu_usage_limit > 99
+            || gstate.global_prefs.cpu_usage_limit < 0.005
+            ) {
             client_mutex.unlock();
             boinc_sleep(10);
             continue;

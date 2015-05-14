@@ -23,6 +23,8 @@
 #include <vector>
 #include <regex.h>
 
+// if you add anything here, initialize if in the constructor
+//
 struct PLAN_CLASS_SPEC {
     char name[256];
     char gpu_type[256];
@@ -34,11 +36,17 @@ struct PLAN_CLASS_SPEC {
     std::vector<std::string> cpu_features;
     double min_ncpus;
     int max_threads;
+    bool nthreads_cmdline;
     double projected_flops_scale;
     bool have_os_regex;
     regex_t os_regex;
+    bool have_cpu_vendor_regex;
+    regex_t cpu_vendor_regex;
     double min_os_version;
+        // Win versions can be 9 digits; may as well be safe
     double max_os_version;
+    int min_android_version;
+    int max_android_version;
     char project_prefs_tag[256];
     bool have_project_prefs_regex;
     regex_t project_prefs_regex;
@@ -94,6 +102,7 @@ struct PLAN_CLASS_SPEC {
     //
     int min_vbox_version;
     int max_vbox_version;
+    vector<int> exclude_vbox_version;
     bool vm_accel_required;
 
     int parse(XML_PARSER&);

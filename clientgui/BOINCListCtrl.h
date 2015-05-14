@@ -74,6 +74,13 @@ public:
     virtual bool            OnSaveState(wxConfigBase* pConfig);
     virtual bool            OnRestoreState(wxConfigBase* pConfig);
 
+    void                    TokenizedStringToArray(wxString tokenized, char * delimiters, wxArrayString* array);
+    void                    SetListColumnOrder(wxArrayString& orderArray);
+    void                    SetStandardColumnOrder();
+    bool                    IsColumnOrderStandard();
+    void                    SetDefaultColumnDisplay();
+    void                    InsertShownColumns(wxString tokenized, char * delimiters);
+
     long                    GetFocusedItem() { return GetNextItem(-1, wxLIST_NEXT_ALL, wxLIST_STATE_FOCUSED); }
     long                    GetFirstSelected() { return GetNextItem(-1, wxLIST_NEXT_ALL, wxLIST_STATE_SELECTED); }
     long                    GetNextSelected(int i) { return GetNextItem(i, wxLIST_NEXT_ALL, wxLIST_STATE_SELECTED); }
@@ -161,12 +168,21 @@ END_DECLARE_EVENT_TYPES()
 // Define a custom event handler
 class MyEvtHandler : public wxEvtHandler
 {
+    DECLARE_DYNAMIC_CLASS(MyEvtHandler)
+
 public:
-    MyEvtHandler(CBOINCListCtrl *theListControl) { m_listCtrl = theListControl; }
+    MyEvtHandler();
+    MyEvtHandler(CBOINCListCtrl *theListControl);
     void                    OnPaint(wxPaintEvent & event);
 
 private:
     CBOINCListCtrl *        m_listCtrl;
+    
+#if !USE_NATIVE_LISTCONTROL
+#ifdef __WXGTK__
+    int                     m_view_startX;
+#endif
+#endif
 
     DECLARE_EVENT_TABLE()
 };

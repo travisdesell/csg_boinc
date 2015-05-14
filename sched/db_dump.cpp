@@ -345,14 +345,30 @@ void write_host(HOST& host, FILE* f, bool detail) {
     );
 
     // host.serialnum stores coprocessor description
+    // and client and vbox versions.
     //
-    if (strlen(host.serialnum)) {
-        char serialnum[1024];
-        xml_escape(host.serialnum, serialnum, sizeof(serialnum));
+    char boinc[256], vbox[256], coprocs[256];
+    char buf[1024];
+    parse_serialnum(host.serialnum, boinc, vbox, coprocs);
+    if (strlen(boinc)) {
+        xml_escape(boinc, buf, sizeof(buf));
         fprintf(f,
-            "    <coprocs>%s</coprocs>\n", serialnum
+            "    <boinc_version>%s</boinc_version>\n", buf
         );
     }
+    if (strlen(vbox)) {
+        xml_escape(vbox, buf, sizeof(buf));
+        fprintf(f,
+            "    <vbox_version>%s</vbox_version>\n", buf
+        );
+    }
+    if (strlen(coprocs)) {
+        xml_escape(coprocs, buf, sizeof(buf));
+        fprintf(f,
+            "    <coprocs>%s</coprocs>\n", buf
+        );
+    }
+
     if (detail) {
         fprintf(f,
             "  <create_time>%d</create_time>\n"
@@ -672,6 +688,9 @@ int tables_file(char* dir) {
         "    <update_time>%d</update_time>\n",
         (int)time(0)
     );
+    if (config.credit_by_app) {
+        fprintf(f.f, "    <credit_by_app/>\n");
+    }
     if (nusers) fprintf(f.f, "    <nusers_total>%d</nusers_total>\n", nusers);
     if (nteams) fprintf(f.f, "    <nteams_total>%d</nteams_total>\n", nteams);
     if (nhosts) fprintf(f.f, "    <nhosts_total>%d</nhosts_total>\n", nhosts);
@@ -833,6 +852,7 @@ int main(int argc, char** argv) {
     check_stop_daemons();
     setbuf(stderr, 0);
 
+    retval = system("cd ../html/ops; echo 2");
     log_messages.printf(MSG_NORMAL, "db_dump starting\n");
     strcpy(spec_filename, "");
     for (i=1; i<argc; i++) {
@@ -944,13 +964,24 @@ int main(int argc, char** argv) {
 
     boinc_mkdir(spec.output_dir);
 
-    tables_file(spec.output_dir);
-
     unsigned int j;
     for (j=0; j<spec.enumerations.size(); j++) {
         ENUMERATION& e = spec.enumerations[j];
         e.make_it_happen(spec.output_dir);
     }
+
+    if (config.credit_by_app) {
+        retval = system("cd ../html/ops ; ./export_credit_by_app.php ../stats_tmp");
+        if (retval) {
+            log_messages.printf(MSG_CRITICAL,
+                "export_credit_by_app.php failed: %d\n", WEXITSTATUS(retval)
+            );
+        }
+    }
+
+    // this must follow the above loop, to get tables counts
+    //
+    tables_file(spec.output_dir);
 
     if (have_badges) {
         write_badge_user(spec.output_dir);

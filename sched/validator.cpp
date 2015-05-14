@@ -44,6 +44,7 @@
 //  [--credit_from_runtime X]   grant credit based on runtime,
 //                              assuming single-CPU app.
 //                              X is the max runtime.
+//  [--wu_id n]                 Validate WU n (debugging)
 
 #include "config.h"
 #include <unistd.h>
@@ -105,6 +106,7 @@ bool credit_from_runtime = false;
 double max_runtime = 0;
 bool no_credit = false;
 bool dry_run = false;
+int wu_id = 0;
 int g_argc;
 char **g_argv;
 
@@ -316,6 +318,9 @@ int handle_wu(
                 if (!no_credit) {
                     result.granted_credit = canonical_result.granted_credit;
                     grant_credit(host, result.sent_time, result.granted_credit);
+                    if (config.credit_by_app) {
+                        grant_credit_by_app(result, result.granted_credit);
+                    }
                 }
                 break;
             case VALIDATE_STATE_INVALID:
@@ -542,6 +547,9 @@ int handle_wu(
                             result.id, result.name, result.granted_credit,
                             result.hostid
                         );
+                        if (config.credit_by_app) {
+                            grant_credit_by_app(result, credit);
+                        }
                     }
                     break;
                 case VALIDATE_STATE_INVALID:
@@ -702,6 +710,11 @@ bool do_validate_scan() {
     // loop over entries that need to be checked
     //
     while (1) {
+        if (wu_id) {
+            // kludge to tell enumerate to return a given WU
+            wu_id_modulus = 1;
+            wu_id_remainder = wu_id;
+        }
         retval = validator.enumerate(
             app.id, SELECT_LIMIT, wu_id_modulus, wu_id_remainder,
             wu_id_min, wu_id_max, items
@@ -725,6 +738,7 @@ bool do_validate_scan() {
         retval = handle_wu(validator, items);
         if (!retval) found = true;
         if (++i == one_pass_N_WU) break;
+        if (wu_id) break;
     }
     return found;
 }
@@ -789,6 +803,7 @@ int main(int argc, char** argv) {
       "  --credit_from_runtime X  Grant credit based on runtime (max X seconds)and estimated FLOPS\n"
       "  --no_credit             Don't grant credit\n"
       "  --sleep_interval n      Set sleep-interval to n\n"
+      "  --wu_id n               Process WU with given ID\n"
       "  -d n, --debug_level n   Set log verbosity level, 1-4\n"
       "  -h | --help             Show this\n"
       "  -v | --version          Show version information\n";
@@ -839,6 +854,9 @@ int main(int argc, char** argv) {
             max_runtime = atof(argv[++i]);
         } else if (is_arg(argv[i], "no_credit")) {
             no_credit = true;
+        } else if (is_arg(argv[i], "wu_id")) {
+            wu_id = atoi(argv[++i]);
+            one_pass = true;
         } else {
             //log_messages.printf(MSG_CRITICAL, "unrecognized arg: %s\n", argv[i]);
         }

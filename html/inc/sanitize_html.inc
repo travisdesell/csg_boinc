@@ -21,6 +21,7 @@ if (is_link($cwd[__FILE__])) $cwd[__FILE__] = readlink($cwd[__FILE__]);
 $cwd[__FILE__] = dirname($cwd[__FILE__]);
 
 require_once($cwd[__FILE__] . "/../inc/kses.php");
+require_once($cwd[__FILE__] . "/../inc/htmLawed.php");
 
 $allowed = array(
     'b' => array(),

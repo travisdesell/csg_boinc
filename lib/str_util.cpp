@@ -26,6 +26,7 @@
 
 #ifndef _WIN32
 #include "config.h"
+#include <sstream>
 #include <string>
 #include <cmath>
 #include <string.h>
@@ -45,6 +46,8 @@
 #include "str_util.h"
 
 using std::string;
+using std::stringstream;
+using std::vector;
 
 // Use this instead of strncpy().
 // Result will always be null-terminated, and it's faster.
@@ -441,6 +444,7 @@ const char* boincerror(int which_error) {
         case ERR_GETRUSAGE: return "getrusage() failed";
         case ERR_BENCHMARK_FAILED: return "benchmark failed";
         case ERR_BAD_HEX_FORMAT: return "hex format key data bad";
+        case ERR_GETADDRINFO: return "getaddrinfo() failed";
         case ERR_DB_NOT_FOUND: return "no database rows found in lookup/enumerate";
         case ERR_DB_NOT_UNIQUE: return "database lookup not unique";
         case ERR_DB_CANT_CONNECT: return "can't connect to database";
@@ -529,14 +533,16 @@ const char* boincerror(int which_error) {
         case ERR_ABORTED_ON_EXIT: return "job was aborted on client exit";
         case ERR_PROC_PARSE: return "a /proc entry was not parsed correctly";
         case ERR_PIPE: return "pipe() failed";
-        case 404: return "HTTP file not found";
-        case 407: return "HTTP proxy authentication failure";
-        case 416: return "HTTP range request error";
-        case 500: return "HTTP internal server error";
-        case 501: return "HTTP not implemented";
-        case 502: return "HTTP bad gateway";
-        case 503: return "HTTP service unavailable";
-        case 504: return "HTTP gateway timeout";
+        case ERR_NEED_HTTPS: return "HTTPS needed";
+        case HTTP_STATUS_NOT_FOUND: return "HTTP file not found";
+        case HTTP_STATUS_PROXY_AUTH_REQ: return "HTTP proxy authentication failure";
+        case HTTP_STATUS_RANGE_REQUEST_ERROR: return "HTTP range request error";
+        case HTTP_STATUS_EXPECTATION_FAILED: return "HTTP expectation failed";
+        case HTTP_STATUS_INTERNAL_SERVER_ERROR: return "HTTP internal server error";
+        case HTTP_STATUS_NOT_IMPLEMENTED: return "HTTP not implemented";
+        case HTTP_STATUS_BAD_GATEWAY: return "HTTP bad gateway";
+        case HTTP_STATUS_SERVICE_UNAVAILABLE: return "HTTP service unavailable";
+        case HTTP_STATUS_GATEWAY_TIMEOUT: return "HTTP gateway timeout";
     }
     static char buf[128];
     sprintf(buf, "Error %d", which_error);
@@ -716,4 +722,37 @@ char* lf_terminate(char* p) {
     p[n] = '\n';
     p[n+1] = 0;
     return p;
+}
+
+void parse_serialnum(char* in, char* boinc, char* vbox, char* coprocs) {
+    strcpy(boinc, "");
+    strcpy(vbox, "");
+    strcpy(coprocs, "");
+    while (*in) {
+        if (*in != '[') break;      // format error
+        char* p = strchr(in, ']');
+        if (!p) break;              // format error
+        p++;
+        char c = *p;
+        *p = 0;
+        if (strstr(in, "BOINC")) {
+            strcpy(boinc, in);
+        } else if (strstr(in, "vbox")) {
+            strcpy(vbox, in);
+        } else {
+            strcat(coprocs, in);
+        }
+        *p = c;
+        in = p;
+    }
+}
+
+vector<string> split(string s, char delim) {
+    vector<string> result;
+    stringstream ss(s);
+    string item;
+    while (getline(ss, item, delim)) {
+        result.push_back(item);
+    }
+    return result;
 }

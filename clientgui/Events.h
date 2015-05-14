@@ -28,9 +28,10 @@
 #define ID_DOCUMENTPOLLTIMER                    6105
 #define ID_ALERTPOLLTIMER                       6106
 #define ID_REFRESHSTATETIMER                    6107
-#define ID_WIZARDATTACH                         6108
-#define ID_WIZARDUPDATE                         6109
-#define ID_WIZARDDETACH                         6110
+#define ID_WIZARDATTACHPROJECT                  6108
+#define ID_WIZARDATTACHACCOUNTMANAGER           6109
+#define ID_WIZARDUPDATE                         6110
+#define ID_WIZARDDETACH                         6111
 
 
 //
@@ -87,6 +88,8 @@
 #define ID_EVENTLOG                             6058
 #define ID_LAUNCHNEWINSTANCE                    6059
 #define ID_DIAGNOSTICLOGFLAGS                   6060
+#define ID_SELECTCOLUMNS                        6061
+#define ID_EXCLUSIVE_APPS                       6063
 
 // Help Menu
 #define ID_HELPBOINC                            6035  // Locked: Used by manager_links.php

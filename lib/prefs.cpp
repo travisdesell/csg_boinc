@@ -185,6 +185,7 @@ bool TIME_PREFS::suspended(double now) {
 
 void WEEK_PREFS::set(int day, double start, double end) {
     if (day < 0 || day > 6) return;
+    if (start == end) return;
     days[day].present = true;
     days[day].start_hour = start;
     days[day].end_hour = end;
@@ -193,6 +194,7 @@ void WEEK_PREFS::set(int day, double start, double end) {
 
 void WEEK_PREFS::set(int day, TIME_SPAN* time) {
     if (day < 0 || day > 6) return;
+    if (time->start_hour == time->end_hour) return;
     days[day].present = true;
     days[day].start_hour = time->start_hour;
     days[day].end_hour = time->end_hour;
@@ -265,8 +267,28 @@ void GLOBAL_PREFS::defaults() {
     // Also, don't memset to 0
 }
 
-// before parsing
-void GLOBAL_PREFS::clear_bools() {
+// values for fields with an enabling checkbox in the GUI.
+// These are the values shown when the checkbox is first checked
+// (in cases where this differs from the default).
+// These should be consistent with html/inc/prefs.inc
+//
+void GLOBAL_PREFS::enabled_defaults() {
+    defaults();
+    disk_max_used_gb = 100;
+    disk_min_free_gb = 1.0;
+    daily_xfer_limit_mb = 10000;
+    daily_xfer_period_days = 30;
+    max_bytes_sec_down = 100*KILO;
+    max_bytes_sec_up = 100*KILO;
+    cpu_times.start_hour = 0;
+    cpu_times.end_hour = 23.983;    // 23:59
+    net_times.start_hour = 0;
+    net_times.end_hour = 23.983;    // 23:59
+}
+
+// call before parsing
+//
+void GLOBAL_PREFS::init_bools() {
     run_on_batteries = false;
     run_if_user_active = false;
     leave_apps_in_memory = false;
@@ -294,7 +316,7 @@ int GLOBAL_PREFS::parse(
     XML_PARSER& xp, const char* host_venue, bool& found_venue, GLOBAL_PREFS_MASK& mask
 ) {
     init();
-    clear_bools();
+    init_bools();
     return parse_override(xp, host_venue, found_venue, mask);
 }
 
@@ -368,6 +390,12 @@ int GLOBAL_PREFS::parse_override(
         if (!xp.is_tag) continue;
         if (xp.match_tag("global_preferences")) continue;
         if (xp.match_tag("/global_preferences")) {
+            if (cpu_times.start_hour == cpu_times.end_hour) {
+                mask.start_hour = mask.end_hour = false;
+            }
+            if (net_times.start_hour == net_times.end_hour) {
+                mask.net_start_hour = mask.net_end_hour = false;
+            }
             return 0;
         }
         if (in_venue) {
@@ -387,7 +415,7 @@ int GLOBAL_PREFS::parse_override(
                 parse_attr(attrs, "name", buf2, sizeof(buf2));
                 if (!strcmp(buf2, host_venue)) {
                     defaults();
-                    clear_bools();
+                    init_bools();
                     mask.clear();
                     in_correct_venue = true;
                     found_venue = true;

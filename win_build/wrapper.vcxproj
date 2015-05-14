@@ -88,6 +88,9 @@
     <CodeAnalysisRuleSet Condition="'$(Configuration)|$(Platform)'=='Release|x64'">AllRules.ruleset</CodeAnalysisRuleSet>
     <CodeAnalysisRules Condition="'$(Configuration)|$(Platform)'=='Release|x64'" />
     <CodeAnalysisRuleAssemblies Condition="'$(Configuration)|$(Platform)'=='Release|x64'" />
+    <TargetName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">wrapper_26014_windows_x86_64</TargetName>
+    <TargetName Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">wrapper_26014_windows_intelx86</TargetName>
+    <TargetName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">wrapper_6.1_windows_x86_64</TargetName>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <Midl>
@@ -127,15 +130,16 @@
       <AdditionalIncludeDirectories>..\..\boinc_depends_win_vs2010\wxwidgets\include;..;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ResourceCompile>
     <Link>
-      <AdditionalDependencies>libcmt.lib;libcpmt.lib;kernel32.lib;user32.lib;gdi32.lib;ole32.lib;psapi.lib;oldnames.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <OutputFile>.\Build\$(Platform)\$(Configuration)\wrapper_26011_windows_intelx86.exe</OutputFile>
+      <AdditionalDependencies>libboinc_staticcrt.lib;libboinczip_staticcrt.lib;libgraphics2.lib;libcmt.lib;libcpmt.lib;kernel32.lib;user32.lib;gdi32.lib;ole32.lib;psapi.lib;oldnames.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <OutputFile>.\Build\$(Platform)\$(Configuration)\$(TargetFileName)</OutputFile>
       <SuppressStartupBanner>true</SuppressStartupBanner>
       <IgnoreAllDefaultLibraries>true</IgnoreAllDefaultLibraries>
       <DelayLoadDLLs>%(DelayLoadDLLs)</DelayLoadDLLs>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <ProgramDatabaseFile>.\Build\$(Platform)\$(Configuration)\wrapper_26011_windows_intelx86.pdb</ProgramDatabaseFile>
+      <ProgramDatabaseFile>.\Build\$(Platform)\$(Configuration)\$(TargetName).pdb</ProgramDatabaseFile>
       <SubSystem>Windows</SubSystem>
       <TargetMachine>MachineX86</TargetMachine>
+      <AdditionalLibraryDirectories>$(TargetDir)</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -177,15 +181,16 @@
       <AdditionalIncludeDirectories>..\..\boinc_depends_win_vs2010\wxwidgets\include;..;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ResourceCompile>
     <Link>
-      <AdditionalDependencies>libcmt.lib;libcpmt.lib;kernel32.lib;user32.lib;gdi32.lib;ole32.lib;psapi.lib;oldnames.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <OutputFile>.\Build\$(Platform)\$(Configuration)\wrapper_26011_windows_x86_64.exe</OutputFile>
+      <AdditionalDependencies>libboinc_staticcrt.lib;libboinczip_staticcrt.lib;libgraphics2.lib;libcmt.lib;libcpmt.lib;kernel32.lib;user32.lib;gdi32.lib;ole32.lib;psapi.lib;oldnames.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <OutputFile>.\Build\$(Platform)\$(Configuration)\$(TargetFileName)</OutputFile>
       <SuppressStartupBanner>true</SuppressStartupBanner>
       <IgnoreAllDefaultLibraries>true</IgnoreAllDefaultLibraries>
       <DelayLoadDLLs>%(DelayLoadDLLs)</DelayLoadDLLs>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <ProgramDatabaseFile>.\Build\$(Platform)\$(Configuration)\wrapper_26011_windows_x86_64.pdb</ProgramDatabaseFile>
+      <ProgramDatabaseFile>.\Build\$(Platform)\$(Configuration)\$(TargetName).pdb</ProgramDatabaseFile>
       <SubSystem>Windows</SubSystem>
       <TargetMachine>MachineX64</TargetMachine>
+      <AdditionalLibraryDirectories>$(TargetDir)</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
@@ -223,15 +228,16 @@
       <AdditionalIncludeDirectories>..\..\boinc_depends_win_vs2010\wxwidgets\include;..;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ResourceCompile>
     <Link>
-      <AdditionalDependencies>libcmtd.lib;libcpmtd.lib;kernel32.lib;user32.lib;gdi32.lib;ole32.lib;psapi.lib;oldnames.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <OutputFile>.\Build\$(Platform)\$(Configuration)\wrapper_6.1_windows_intelx86.exe</OutputFile>
+      <AdditionalDependencies>libboinc_staticcrt.lib;libboinczip_staticcrt.lib;libgraphics2.lib;libcmtd.lib;libcpmtd.lib;kernel32.lib;user32.lib;gdi32.lib;ole32.lib;psapi.lib;oldnames.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <OutputFile>.\Build\$(Platform)\$(Configuration)\$(TargetFileName)</OutputFile>
       <SuppressStartupBanner>true</SuppressStartupBanner>
       <IgnoreAllDefaultLibraries>true</IgnoreAllDefaultLibraries>
       <DelayLoadDLLs>%(DelayLoadDLLs)</DelayLoadDLLs>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <ProgramDatabaseFile>.\Build\$(Platform)\$(Configuration)\wrapper_6.1_windows_intelx86.pdb</ProgramDatabaseFile>
+      <ProgramDatabaseFile>.\Build\$(Platform)\$(Configuration)\$(TargetName).pdb</ProgramDatabaseFile>
       <SubSystem>Windows</SubSystem>
       <TargetMachine>MachineX86</TargetMachine>
+      <AdditionalLibraryDirectories>$(TargetDir)</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -269,15 +275,16 @@
       <AdditionalIncludeDirectories>..\..\boinc_depends_win_vs2010\wxwidgets\include;..;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ResourceCompile>
     <Link>
-      <AdditionalDependencies>libcmtd.lib;libcpmtd.lib;kernel32.lib;user32.lib;gdi32.lib;ole32.lib;psapi.lib;oldnames.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <OutputFile>.\Build\$(Platform)\$(Configuration)\wrapper_6.1_windows_x86_64.exe</OutputFile>
+      <AdditionalDependencies>libboinc_staticcrt.lib;libboinczip_staticcrt.lib;libgraphics2.lib;libcmtd.lib;libcpmtd.lib;kernel32.lib;user32.lib;gdi32.lib;ole32.lib;psapi.lib;oldnames.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <OutputFile>.\Build\$(Platform)\$(Configuration)\$(TargetFileName)</OutputFile>
       <SuppressStartupBanner>true</SuppressStartupBanner>
       <IgnoreAllDefaultLibraries>true</IgnoreAllDefaultLibraries>
       <DelayLoadDLLs>%(DelayLoadDLLs)</DelayLoadDLLs>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <ProgramDatabaseFile>.\Build\$(Platform)\$(Configuration)\wrapper_6.1_windows_x86_64.pdb</ProgramDatabaseFile>
+      <ProgramDatabaseFile>.\Build\$(Platform)\$(Configuration)\$(TargetName).pdb</ProgramDatabaseFile>
       <SubSystem>Windows</SubSystem>
       <TargetMachine>MachineX64</TargetMachine>
+      <AdditionalLibraryDirectories>$(TargetDir)</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -294,20 +301,6 @@
     <ClInclude Include="..\samples\wrapper\regexp_int.h" />
     <ClInclude Include="..\samples\wrapper\regmagic.h" />
     <ClInclude Include="..\samples\wrapper\wrapper_win.h" />
-  </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="libboincapi_staticcrt.vcxproj">
-      <Project>{07bda8f7-4aaf-4a3b-b96e-ea72a143c5ae}</Project>
-      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
-    </ProjectReference>
-    <ProjectReference Include="libboinczip_staticcrt.vcxproj">
-      <Project>{753e897d-9ece-42b1-9f0d-cd566775c77e}</Project>
-      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
-    </ProjectReference>
-    <ProjectReference Include="libboinc_staticcrt.vcxproj">
-      <Project>{b00664bd-71eb-46c1-957e-cd851418d395}</Project>
-      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
-    </ProjectReference>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="..\samples\wrapper\wrapper_win.rc" />

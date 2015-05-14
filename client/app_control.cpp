@@ -210,10 +210,10 @@ int ACTIVE_TASK::request_abort() {
 }
 
 #ifdef _WIN32
-static void kill_app_process(int pid, bool will_restart) {
+static void kill_app_process(int pid, bool will_restart, bool show_errors) {
     int retval = 0;
     retval = kill_program(pid, will_restart?0:EXIT_ABORTED_BY_CLIENT);
-    if (retval && log_flags.task_debug) {
+    if (retval && log_flags.task_debug && show_errors) {
         msg_printf(0, MSG_INFO,
             "[task] kill_app_process() failed: %s",
             strerror(retval)
@@ -221,11 +221,11 @@ static void kill_app_process(int pid, bool will_restart) {
     }
 }
 #else
-static void kill_app_process(int pid, bool) {
+static void kill_app_process(int pid, bool, bool show_errors) {
     int retval = 0;
     if (g_use_sandbox) {
         retval = kill_via_switcher(pid);
-        if (retval && log_flags.task_debug) {
+        if (retval && log_flags.task_debug && show_errors) {
             msg_printf(0, MSG_INFO,
                 "[task] kill_via_switcher() failed: %s (%d)",
                 (retval>=0) ? strerror(errno) : boincerror(retval), retval
@@ -233,7 +233,7 @@ static void kill_app_process(int pid, bool) {
         }
     } else {
         retval = kill(pid, SIGKILL);
-        if (retval && log_flags.task_debug) {
+        if (retval && log_flags.task_debug && show_errors) {
             msg_printf(0, MSG_INFO,
                 "[task] kill() failed: %s",
                 strerror(errno)
@@ -243,30 +243,30 @@ static void kill_app_process(int pid, bool) {
 }
 #endif
 
-static inline void kill_processes(vector<int> pids, bool will_restart) {
-    for (unsigned int i=0; i<pids.size(); i++) {
-        kill_app_process(pids[i], will_restart);
-    }
-}
-
 // Kill a task whose main process is still running
 // Just kill the main process; shared mem and subsidiary processes
 // will be cleaned up after it exits, by cleanup_task();
 //
 int ACTIVE_TASK::kill_running_task(bool will_restart) {
-    kill_app_process(pid, will_restart);
+    kill_app_process(pid, will_restart, true);
     return 0;
 }
 
-// Clean up the subsidiary processes of a task whose main process has exited,
+// Kill any remaining subsidiary processes
+// of a task whose main process has exited,
 // namely:
 // - its descendants (as recently enumerated; it's too late to do that now)
 //   This list will be populated only in the quit and abort cases.
 // - its "other" processes, e.g. VMs
 //
 int ACTIVE_TASK::kill_subsidiary_processes() {
-    kill_processes(other_pids, true);
-    kill_processes(descendants, true);
+    unsigned int i;
+    for (i=0; i<other_pids.size(); i++) {
+        kill_app_process(other_pids[i], false, false);
+    }
+    for (i=0; i<descendants.size(); i++) {
+        kill_app_process(descendants[i], false, false);
+    }
     return 0;
 }
 
@@ -371,12 +371,12 @@ void ACTIVE_TASK::handle_temporary_exit(
     } else {
         if (is_notice) {
             msg_printf(result->project, MSG_USER_ALERT,
-                "Can't run task: %s", reason
+                "Task postponed: %s", reason
             );
         } else {
-            if (log_flags.task_debug) {
+            if (log_flags.task) {
                 msg_printf(result->project, MSG_INFO,
-                    "[task] task called temporary_exit(%f, %s)", backoff, reason
+                    "task postponed %f sec: %s", backoff, reason
                 );
             }
         }
@@ -587,10 +587,30 @@ void ACTIVE_TASK::handle_exited_app(int stat) {
     gstate.request_work_fetch("application exited");
 }
 
+// structure of a finish file (see boinc_api.cpp)):
+// exit status (int)
+// message
+// "notice" or blank line
+// ... or empty
+//
 bool ACTIVE_TASK::finish_file_present() {
-    char path[MAXPATHLEN];
+    char path[MAXPATHLEN], buf[1024], buf2[256];
+    strcpy(buf, "");
+    strcpy(buf2, "");
     sprintf(path, "%s/%s", slot_dir, BOINC_FINISH_CALLED_FILE);
-    return (boinc_file_exists(path) != 0);
+    FILE* f = fopen(path, "r");
+    if (!f) return false;
+    fgets(buf, sizeof(buf), f);
+    fgets(buf, sizeof(buf), f);
+    fgets(buf2, sizeof(buf2), f);
+    if (strlen(buf)) {
+        msg_printf(result->project,
+            strstr(buf2, "notice")?MSG_USER_ALERT:MSG_INFO,
+            "Message from task: %s", buf
+        );
+    }
+    fclose(f);
+    return true;
 }
 
 bool ACTIVE_TASK::temporary_exit_file_present(
@@ -785,7 +805,7 @@ bool ACTIVE_TASK::check_max_disk_exceeded() {
                 "Aborting task %s: exceeded disk limit: %.2fMB > %.2fMB\n",
                 result->name, disk_usage/MEGA, max_disk_usage/MEGA
             );
-            abort_task(EXIT_DISK_LIMIT_EXCEEDED, "Maximum disk usage exceeded");
+            abort_task(EXIT_DISK_LIMIT_EXCEEDED, "Disk usage limit exceeded");
             return true;
         }
     }
@@ -1105,7 +1125,7 @@ int ACTIVE_TASK_SET::abort_project(PROJECT* project) {
             task_iter = active_tasks.erase(task_iter);
             delete atp;
         } else {
-            task_iter++;
+            ++task_iter;
         }
     }
     return 0;
@@ -1132,6 +1152,10 @@ void ACTIVE_TASK_SET::suspend_all(int reason) {
         case PROCESS_SUSPENDED:
             break;
         default:
+            continue;
+        }
+
+        if (cc_config.dont_suspend_nci && atp->result->non_cpu_intensive()) {
             continue;
         }
 
@@ -1454,24 +1478,17 @@ void ACTIVE_TASK_SET::get_msgs() {
     }
     last_time = gstate.now;
 
-    double et_diff, et_diff_throttle;
-    switch (gstate.suspend_reason) {
-    case 0:
-    case SUSPEND_REASON_CPU_THROTTLE:
-        et_diff = delta_t;
-        et_diff_throttle = delta_t * gstate.global_prefs.cpu_usage_limit/100;
-        break;
-    default:
-        et_diff = et_diff_throttle = 0;
-        break;
-    }
+    double et_diff = delta_t;
+    double et_diff_throttle = delta_t * gstate.global_prefs.cpu_usage_limit/100;
 
     for (i=0; i<active_tasks.size(); i++) {
         atp = active_tasks[i];
         if (!atp->process_exists()) continue;
         old_time = atp->checkpoint_cpu_time;
-        if (atp->scheduler_state == CPU_SCHED_SCHEDULED) {
-            atp->elapsed_time += atp->result->dont_throttle()?et_diff:et_diff_throttle;
+        if (atp->task_state() == PROCESS_EXECUTING) {
+            double x = atp->result->dont_throttle()?et_diff:et_diff_throttle;
+            atp->elapsed_time += x;
+            atp->wup->project->elapsed_time += x;
         }
         if (atp->get_app_status_msg()) {
             if (old_time != atp->checkpoint_cpu_time) {

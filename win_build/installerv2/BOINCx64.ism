@@ -253,7 +253,6 @@
 		<col key="yes" def="s72">Name</col>
 		<col def="V0">Data</col>
 		<col def="S255">ISBuildSourcePath</col>
-		<row><td>ISSELFREG.DLL</td><td/><td>&lt;ISProductFolder&gt;\redist\language independent\i386\isregsvr.dll</td></row>
 		<row><td>ISSetupFilesHelper</td><td/><td>&lt;ISProductFolder&gt;\redist\language independent\i386\SFHelper.dll</td></row>
 		<row><td>InteriorBin1</td><td/><td>&lt;ISProductFolder&gt;\Redist\Language Independent\OS Independent\IsDialogBanner.ibd</td></row>
 		<row><td>NewBinary1</td><td/><td>&lt;ISProductFolder&gt;\Redist\Language Independent\OS Independent\IsDialogBanner.ibd</td></row>
@@ -924,6 +923,7 @@
 		<col def="S0">Target</col>
 		<col def="I4">ExtendedType</col>
 		<col def="S255">ISComments</col>
+		<row><td>CAAnnounceUpgrade</td><td>1</td><td>NewBinary6</td><td>AnnounceUpgrade</td><td/><td/></row>
 		<row><td>CACleanupOldBinaries</td><td>1</td><td>NewBinary6</td><td>CleanupOldBinaries</td><td/><td/></row>
 		<row><td>CACreateAcctMgrLoginFile</td><td>1</td><td>NewBinary6</td><td>CreateAcctMgrLoginFile</td><td/><td/></row>
 		<row><td>CACreateBOINCAccounts</td><td>1</td><td>NewBinary6</td><td>CreateBOINCAccounts</td><td/><td/></row>
@@ -970,13 +970,9 @@
 		<row><td>CAVerifyInstallDirectories</td><td>1</td><td>NewBinary6</td><td>VerifyInstallDirectories</td><td/><td/></row>
 		<row><td>ISPreventDowngrade</td><td>19</td><td/><td>[IS_PREVENT_DOWNGRADE_EXIT]</td><td/><td/></row>
 		<row><td>ISPrint</td><td>1</td><td>SetAllUsers.dll</td><td>PrintScrollableText</td><td/><td>Prints the contents of a ScrollableText control on a dialog.</td></row>
-		<row><td>ISSelfRegisterCosting</td><td>1</td><td>ISSELFREG.DLL</td><td>ISSelfRegisterCosting</td><td/><td/></row>
-		<row><td>ISSelfRegisterFiles</td><td>3073</td><td>ISSELFREG.DLL</td><td>ISSelfRegisterFiles</td><td/><td/></row>
-		<row><td>ISSelfRegisterFinalize</td><td>1</td><td>ISSELFREG.DLL</td><td>ISSelfRegisterFinalize</td><td/><td/></row>
 		<row><td>ISSetAllUsers</td><td>257</td><td>SetAllUsers.dll</td><td>SetAllUsers</td><td/><td/></row>
 		<row><td>ISSetupFilesCleanup</td><td>257</td><td>ISSetupFilesHelper</td><td>SFCleanupEx</td><td/><td/></row>
 		<row><td>ISSetupFilesExtract</td><td>257</td><td>ISSetupFilesHelper</td><td>SFStartupEx</td><td/><td/></row>
-		<row><td>ISUnSelfRegisterFiles</td><td>3073</td><td>ISSELFREG.DLL</td><td>ISUnSelfRegisterFiles</td><td/><td/></row>
 		<row><td>LaunchBOINCManagerXP</td><td>210</td><td>boincmgr.exe</td><td/><td/><td/></row>
 		<row><td>LaunchBOINCTrayXP</td><td>210</td><td>boinctray.exe</td><td/><td/><td/></row>
 		<row><td>SetARPINSTALLLOCATION</td><td>51</td><td>ARPINSTALLLOCATION</td><td>[INSTALLDIR]</td><td/><td/></row>
@@ -1818,8 +1814,8 @@
 		<row><td>libcurl.dll</td><td>_BOINCDepends</td><td>libcurl.dll</td><td>0</td><td/><td/><td/><td>1</td><td>&lt;PATH_TO_RELEASE_FILES&gt;\libcurl.dll</td><td>1</td><td/></row>
 		<row><td>libeay32.dll</td><td>_BOINCDepends</td><td>libeay32.dll</td><td>0</td><td/><td/><td/><td>1</td><td>&lt;PATH_TO_RELEASE_FILES&gt;\libeay32.dll</td><td>1</td><td/></row>
 		<row><td>liberationsans_regular.ttf</td><td>_BOINCScreensaver</td><td>LIBERA~1.TTF|LiberationSans-Regular.ttf</td><td>0</td><td/><td/><td/><td>1</td><td>&lt;PATH_TO_BOINC_FILES&gt;\api\ttf\liberation-fonts-ttf-2.00.0\LiberationSans-Regular.ttf</td><td>1</td><td/></row>
-		<row><td>msvcp100.dll</td><td>_BOINCDepends</td><td>msvcp100.dll</td><td>0</td><td/><td/><td/><td>1</td><td>&lt;ProgramFilesFolder&gt;\microsoft visual studio 10.0\vc\redist\x64\microsoft.vc100.crt\msvcp100.dll</td><td>1</td><td/></row>
-		<row><td>msvcr100.dll</td><td>_BOINCDepends</td><td>msvcr100.dll</td><td>0</td><td/><td/><td/><td>1</td><td>&lt;ProgramFilesFolder&gt;\microsoft visual studio 10.0\vc\redist\x64\microsoft.vc100.crt\msvcr100.dll</td><td>1</td><td/></row>
+		<row><td>msvcp100.dll</td><td>_BOINCDepends</td><td>msvcp100.dll</td><td>0</td><td/><td/><td/><td>1</td><td>&lt;PATH_TO_RELEASE_FILES&gt;\msvcp100.dll</td><td>1</td><td/></row>
+		<row><td>msvcr100.dll</td><td>_BOINCDepends</td><td>msvcr100.dll</td><td>0</td><td/><td/><td/><td>1</td><td>&lt;PATH_TO_RELEASE_FILES&gt;\msvcr100.dll</td><td>1</td><td/></row>
 		<row><td>placeholder.txt</td><td>_BOINCData</td><td>PLACEH~1.TXT|placeholder.txt</td><td>0</td><td/><td/><td/><td>1</td><td>&lt;ISProjectFolder&gt;\redist\placeholder.txt</td><td>1</td><td/></row>
 		<row><td>placeholder.txt1</td><td>_BOINCDataProjects</td><td>PLACEH~1.TXT|placeholder.txt</td><td>0</td><td/><td/><td/><td>1</td><td>&lt;ISProjectFolder&gt;\redist\placeholder.txt</td><td>1</td><td/></row>
 		<row><td>placeholder.txt2</td><td>_BOINCDataSlots</td><td>PLACEH~1.TXT|placeholder.txt</td><td>0</td><td/><td/><td/><td>1</td><td>&lt;ISProjectFolder&gt;\redist\placeholder.txt</td><td>1</td><td/></row>
@@ -2192,7 +2188,7 @@
 		<col def="S0">IncludeFiles</col>
 		<col def="S0">ExcludeFiles</col>
 		<col def="I4">ISAttributes</col>
-		<row><td>_BOINCManagerGlobalization</td><td>&lt;PATH_TO_LOCALE_FILES&gt;</td><td>4</td><td>BOINC-Manager.mo;BOINC-Client.mo</td><td/><td>2</td></row>
+		<row><td>_BOINCManagerGlobalization</td><td>&lt;PATH_TO_LOCALE_FILES&gt;</td><td>4</td><td>BOINC-Manager.mo;BOINC-Client.mo;BOINC-Web.mo</td><td/><td>2</td></row>
 		<row><td>_BOINCManagerSkin</td><td>&lt;PATH_TO_BOINC_FILES&gt;\clientgui\skins\Default</td><td>4</td><td>*.xml, *.jpg, *.png</td><td/><td>10</td></row>
 	</table>
 
@@ -2464,7 +2460,7 @@
 		<row><td>WEBx64</td><td>ProductCode</td><td/></row>
 		<row><td>WEBx64</td><td>ProductName</td><td/></row>
 		<row><td>WEBx64</td><td>ProductVersion</td><td/></row>
-		<row><td>WEBx64</td><td>SetupFileName</td><td>boinc_7.3.19_windows_x86_64</td></row>
+		<row><td>WEBx64</td><td>SetupFileName</td><td>boinc_7.5.0_windows_x86_64</td></row>
 		<row><td>WEBx64</td><td>UpgradeCode</td><td/></row>
 	</table>
 
@@ -3866,7 +3862,7 @@ The show graphics feature does NOT work in this configuration.</td><td>0</td><td
 		<row><td>ID_STRING36</td><td>1033</td><td>BOINCM~1|BOINC Manager Startup</td><td>0</td><td/><td>1352434064</td></row>
 		<row><td>ID_STRING37</td><td>1033</td><td>BOINCT~1|BOINC Tray</td><td>0</td><td/><td>1352434096</td></row>
 		<row><td>ID_STRING38</td><td>1033</td><td>BOINCM~1|BOINC Manager</td><td>0</td><td/><td>1352436176</td></row>
-		<row><td>ID_STRING39</td><td>1033</td><td>[ProductName] requires that your computer is running Windows 2000 with Service Pack 4. Please go to the Microsoft web site and download Service Pack 4.</td><td>0</td><td/><td>438070669</td></row>
+		<row><td>ID_STRING39</td><td>1033</td><td>[ProductName] requires that your computer is running Windows XP or newer.</td><td>0</td><td/><td>1520658893</td></row>
 		<row><td>ID_STRING4</td><td>1033</td><td>Closing any running instances of the BOINC Manager</td><td>0</td><td/><td>1092167440</td></row>
 		<row><td>ID_STRING40</td><td>1033</td><td>Installing [ProductName] on a domain controller is not currently supported.</td><td>0</td><td/><td>-887315856</td></row>
 		<row><td>ID_STRING41</td><td>1033</td><td>Description</td><td>0</td><td/><td>-887342480</td></row>
@@ -4050,6 +4046,7 @@ Click Advanced to customize.</td><td>0</td><td/><td>1427879980</td></row>
 		<row><td>AllocateRegistrySpace</td><td>NOT Installed</td><td>1562</td><td>AllocateRegistrySpace</td><td/></row>
 		<row><td>AppSearch</td><td/><td>400</td><td>AppSearch</td><td/></row>
 		<row><td>BindImage</td><td/><td>4300</td><td>BindImage</td><td/></row>
+		<row><td>CAAnnounceUpgrade</td><td>VersionNT And REMOVE &lt;&gt; "ALL"</td><td>1001</td><td/><td/></row>
 		<row><td>CACleanupOldBinaries</td><td>REMOVE &lt;&gt; "ALL"</td><td>796</td><td/><td/></row>
 		<row><td>CACreateAcctMgrLoginFile</td><td>NOT Installed</td><td>6605</td><td/><td/></row>
 		<row><td>CACreateBOINCAccounts</td><td>VersionNT And REMOVE &lt;&gt; "ALL" AND ENABLEPROTECTEDAPPLICATIONEXECUTION3 = 1</td><td>1546</td><td/><td/></row>
@@ -4068,7 +4065,7 @@ Click Advanced to customize.</td><td>0</td><td/><td>1427879980</td></row>
 		<row><td>CAGrantBOINCProjectsVirtualBoxRights</td><td>VersionNT And REMOVE &lt;&gt; "ALL" AND ENABLEPROTECTEDAPPLICATIONEXECUTION3 = 1</td><td>1560</td><td/><td/></row>
 		<row><td>CAGrantBOINCUsersRights</td><td>VersionNT And REMOVE &lt;&gt; "ALL" AND ENABLEPROTECTEDAPPLICATIONEXECUTION3 = 1</td><td>1556</td><td/><td/></row>
 		<row><td>CARestorePermissionBOINCData</td><td>VersionNT And REMOVE = "ALL" AND ENABLEPROTECTEDAPPLICATIONEXECUTION3 = 1</td><td>6612</td><td/><td/></row>
-		<row><td>CARestoreSetupState</td><td>VersionNT And REMOVE = "ALL"</td><td>1001</td><td/><td/></row>
+		<row><td>CARestoreSetupState</td><td>VersionNT And REMOVE = "ALL"</td><td>1002</td><td/><td/></row>
 		<row><td>CARevokeBOINCAdminsRights</td><td>VersionNT And REMOVE = "ALL" AND ENABLEPROTECTEDAPPLICATIONEXECUTION3 = 1</td><td>1554</td><td/><td/></row>
 		<row><td>CARevokeBOINCMasterRights</td><td>VersionNT And REMOVE = "ALL" AND ENABLEPROTECTEDAPPLICATIONEXECUTION3 = 1</td><td>1548</td><td/><td/></row>
 		<row><td>CARevokeBOINCProjectRights</td><td>VersionNT And REMOVE = "ALL" AND ENABLEPROTECTEDAPPLICATIONEXECUTION3 = 1</td><td>1550</td><td/><td/></row>
@@ -4098,13 +4095,9 @@ Click Advanced to customize.</td><td>0</td><td/><td>1427879980</td></row>
 		<row><td>FileCost</td><td/><td>900</td><td>FileCost</td><td/></row>
 		<row><td>FindRelatedProducts</td><td>NOT ISSETUPDRIVEN</td><td>420</td><td>FindRelatedProducts</td><td/></row>
 		<row><td>ISPreventDowngrade</td><td>ISFOUNDNEWERPRODUCTVERSION</td><td>450</td><td/><td/></row>
-		<row><td>ISSelfRegisterCosting</td><td/><td>2201</td><td/><td/></row>
-		<row><td>ISSelfRegisterFiles</td><td/><td>5601</td><td/><td/></row>
-		<row><td>ISSelfRegisterFinalize</td><td/><td>6608</td><td/><td/></row>
 		<row><td>ISSetAllUsers</td><td>Not Installed</td><td>10</td><td/><td/></row>
 		<row><td>ISSetupFilesCleanup</td><td/><td>6615</td><td/><td/></row>
 		<row><td>ISSetupFilesExtract</td><td/><td>3</td><td/><td/></row>
-		<row><td>ISUnSelfRegisterFiles</td><td/><td>2202</td><td/><td/></row>
 		<row><td>InstallFiles</td><td/><td>4000</td><td>InstallFiles</td><td/></row>
 		<row><td>InstallFinalize</td><td/><td>6601</td><td>InstallFinalize</td><td/></row>
 		<row><td>InstallInitialize</td><td/><td>1501</td><td>InstallInitialize</td><td/></row>
@@ -4249,9 +4242,7 @@ VwBlAGIAAQBXAEUAQgB4ADYANAA=
 	<table name="LaunchCondition">
 		<col key="yes" def="s255">Condition</col>
 		<col def="l255">Description</col>
-		<row><td>(((Not Version9X=400) And (Not Version9X=410) And (Not Version9X=490) And (Not VersionNT=400)) Or ((VersionNT&gt;=500) And (MsiNTProductType &lt;&gt; 2))) </td><td>##ID_STRING40##</td></row>
-		<row><td>(((Not Version9X=400) And (Not Version9X=410) And (Not Version9X=490) And (Not VersionNT=400)) Or (VersionNT&gt;500) Or ((VersionNT=500) And (ServicePackLevel &gt;= 4)))</td><td>##ID_STRING39##</td></row>
-		<row><td>(Not Version9X=400) And (Not Version9X=410) And (Not Version9X=490) And (Not VersionNT=400)</td><td>##IDPROP_EXPRESS_LAUNCH_CONDITION_OS##</td></row>
+		<row><td>((Not Version9X=400) And (Not Version9X=410) And (Not Version9X=490) And (Not VersionNT=400)) And (VersionNT&gt;500)</td><td>##ID_STRING39##</td></row>
 		<row><td>AdminUser</td><td>##IDPROP_EXPRESS_LAUNCH_CONDITION_ADMIN##</td></row>
 	</table>
 
@@ -4541,6 +4532,7 @@ VwBlAGIAAQBXAEUAQgB4ADYANAA=
 		<row><td>IS_PROGMSG_XML_UPDATE_FILE</td><td>##IDS_PROGMSG_XML_UPDATE_FILE##</td><td/></row>
 		<row><td>InstallChoice</td><td>AR</td><td/></row>
 		<row><td>LAUNCHPROGRAM</td><td>1</td><td/></row>
+		<row><td>MSIRESTARTMANAGERCONTROL</td><td>Disable</td><td/></row>
 		<row><td>Manufacturer</td><td>##COMPANY_NAME##</td><td/></row>
 		<row><td>MsiHiddenProperties</td><td>BOINC_MASTER_PASSWORD;BOINC_PROJECT_PASSWORD</td><td/></row>
 		<row><td>MsiLogging</td><td>voicewarmup</td><td/></row>
@@ -4559,11 +4551,11 @@ VwBlAGIAAQBXAEUAQgB4ADYANAA=
 		<row><td>PROGMSG_IIS_ROLLBACKAPPPOOLS</td><td>##IDS_PROGMSG_IIS_ROLLBACKAPPPOOLS##</td><td/></row>
 		<row><td>PROGMSG_IIS_ROLLBACKWEBSERVICEEXTENSIONS</td><td>##IDS_PROGMSG_IIS_ROLLBACKWEBSERVICEEXTENSIONS##</td><td/></row>
 		<row><td>PROGRAMFILETOLAUNCHATEND</td><td>[#boincmgr.exe]</td><td/></row>
-		<row><td>ProductCode</td><td>{7A9E897C-0C22-47E5-BE53-B44EF0D29E0D}</td><td/></row>
+		<row><td>ProductCode</td><td>{98B90EDE-1583-4117-8DAF-79B7E2FEA0DE}</td><td/></row>
 		<row><td>ProductID</td><td>none</td><td/></row>
 		<row><td>ProductLanguage</td><td>1033</td><td/></row>
 		<row><td>ProductName</td><td>BOINC</td><td/></row>
-		<row><td>ProductVersion</td><td>7.3.19</td><td/></row>
+		<row><td>ProductVersion</td><td>7.5.0</td><td/></row>
 		<row><td>ProgressType0</td><td>install</td><td/></row>
 		<row><td>ProgressType1</td><td>Installing</td><td/></row>
 		<row><td>ProgressType2</td><td>installed</td><td/></row>

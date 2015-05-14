@@ -61,7 +61,7 @@ if (get_str("submit",true)){
     }
 }
 
-$no_forum_rating = parse_bool($config, "no_forum_rating");
+$no_forum_rating = parse_bool(get_config(), "no_forum_rating");
 
 //__--------------- Display part
 if ($success_page==1) {
@@ -82,10 +82,10 @@ if ($success_page==1) {
     echo form_tokens($user->authenticator);
     row1(tra("Report post"));
     row2(tra("Why do you find the post offensive: %1Please include enough information so that a person that
-has not yet read the thread will quickly be able to identify the issue.%2", "<span class=\"smalltext\">", "</span>"),
+has not yet read the thread will quickly be able to identify the issue.%2", "<small>", "</small>"),
         "<textarea name=\"reason\" rows=12 cols=54></textarea>"
     );
-    row2("", "<input type=\"submit\" name=\"submit\" value=\"".tra("OK")."\">");
+    row2("", "<input class=\"btn btn-default\" type=\"submit\" name=\"submit\" value=\"".tra("OK")."\">");
     echo "<input type=\"hidden\" name=\"post\" value=\"".$post->id."\">";
     echo "</form>";
     end_table();

@@ -834,7 +834,7 @@ int handle_global_prefs() {
 // if the client has an old code sign public key,
 // send it the new one, with a signature based on the old one.
 // If they don't have a code sign key, send them one.
-// Return false if they have a key we recognize
+// Return false if they have a key we don't recognize
 // (in which case we won't send them work).
 //
 bool send_code_sign_key(char* code_sign_key) {
@@ -842,70 +842,79 @@ bool send_code_sign_key(char* code_sign_key) {
     int i, retval;
     char path[MAXPATHLEN];
 
-    if (strlen(g_request->code_sign_key)) {
-        if (strcmp(g_request->code_sign_key, code_sign_key)) {
-            log_messages.printf(MSG_NORMAL, "received old code sign key\n");
+    if (!strlen(g_request->code_sign_key)) {
+        safe_strcpy(g_reply->code_sign_key, code_sign_key);
+        return true;
+    }
+    if (!strcmp(g_request->code_sign_key, code_sign_key)) {
+        return true;
+    }
 
-            // look for a signature file for the key the client has.
-            // these are in pairs of files (N = 0, 1, ...)
-            // old_key_N: contains an old key
-            // signature_N: contains a signature for new key,
-            // based on the old key
-            // A project can have several of these pairs if it wants,
-            // e.g. if it changes keys a lot.
+    log_messages.printf(MSG_NORMAL, "received old code sign key\n");
+
+    // look for a signature file for the client's key.
+    // These are in pairs of files (N = 0, 1, ...)
+    // old_key_N: contains an old key
+    // signature_N: contains a signature for new key,
+    // based on the old key
+    // signature_stripped_N: signature for new key w/ trailing \n removed
+    // (needed for 7.0+ clients, which strip trailing whitespace)
+    //
+    // A project can have several of these if it wants,
+    // e.g. if it changes keys a lot.
+    //
+    for (i=0; ; i++) {
+        sprintf(path, "%s/old_key_%d", config.key_dir, i);
+        retval = read_file_malloc(path, oldkey);
+        if (retval) {
+            // we've scanned all the signature files and
+            // didn't find one that worked.
+            // User must reattach.
             //
-            for (i=0; ; i++) {
-                sprintf(path, "%s/old_key_%d", config.key_dir, i);
-                retval = read_file_malloc(path, oldkey);
-                if (retval) {
-                    // we've scanned all the signature files and
-                    // didn't find one that worked.
-                    // User must reattach.
-                    //
-                    g_reply->insert_message(
-                       _("Invalid code signing key.  To fix, remove and add this project."),
-                       "notice"
-                    );
-                    return false;
-                }
-                strip_whitespace(oldkey);
-                if (!strcmp(oldkey, g_request->code_sign_key)) {
-                    // We've found the client's key.
-                    // Get the signature for the new key.
-                    //
-                    sprintf(path, "%s/signature_%d", config.key_dir, i);
-                    retval = read_file_malloc(path, signature);
-                    if (retval) {
-                        // project is missing the signature file.
-                        // Tell the user to reattach.
-                        //
-                        g_reply->insert_message(
-                           _("The project has changed its security key.  Please remove and add this project."),
-                           "notice"
-                        );
-                        log_messages.printf(MSG_CRITICAL,
-                            "Missing signature file for old key %d\n", i
-                        );
-                        free(oldkey);
-                        return false;
-                    } else {
-                        log_messages.printf(MSG_NORMAL,
-                            "sending new code sign key and signature\n"
-                        );
-                        safe_strcpy(g_reply->code_sign_key, code_sign_key);
-                        safe_strcpy(g_reply->code_sign_key_signature, signature);
-                        free(signature);
-                        free(oldkey);
-                        return true;
-                    }
-                }
+            log_messages.printf(MSG_CRITICAL,
+                "scanned old_key_i files, can find client's key\n"
+            );
+            break;
+        }
+        strip_whitespace(oldkey);
+        if (!strcmp(oldkey, g_request->code_sign_key)) {
+            // We've found the client's key.
+            // Get the signature for the new key.
+            //
+            if (g_request->core_client_major_version < 7) {
+                sprintf(path, "%s/signature_%d", config.key_dir, i);
+            } else {
+                sprintf(path, "%s/signature_stripped_%d", config.key_dir, i);
+            }
+            retval = read_file_malloc(path, signature);
+            if (retval) {
+                // project is missing the signature file.
+                // Tell the user to reattach.
+                //
+                log_messages.printf(MSG_CRITICAL,
+                    "Missing signature file for old key %d\n", i
+                );
                 free(oldkey);
+                break;
+            } else {
+                log_messages.printf(MSG_NORMAL,
+                    "sending new code sign key and signature\n"
+                );
+                safe_strcpy(g_reply->code_sign_key, code_sign_key);
+                safe_strcpy(g_reply->code_sign_key_signature, signature);
+                free(signature);
+                free(oldkey);
+                return true;
             }
         }
-    } else {
-        safe_strcpy(g_reply->code_sign_key, code_sign_key);
+        free(oldkey);
     }
-    return true;
+
+    g_reply->insert_message(
+       _("The project has changed its security key.  Please remove and add this project."),
+       "notice"
+    );
+    return false;
 }
 
 // If <min_core_client_version_announced> is set,
@@ -1119,9 +1128,10 @@ static inline bool requesting_work() {
     if (g_request->dont_send_work) return false;
     if (g_request->work_req_seconds > 0) return true;
     if (g_request->cpu_req_secs > 0) return true;
-    if (g_request->coprocs.nvidia.count && g_request->coprocs.nvidia.req_secs) return true;
-    if (g_request->coprocs.ati.count && g_request->coprocs.ati.req_secs) return true;
-    if (g_request->coprocs.intel_gpu.count && g_request->coprocs.intel_gpu.req_secs) return true;
+    for (int i=1; i<NPROC_TYPES; i++) {
+        COPROC* cp = g_request->coprocs.proc_type_to_coproc(i);
+        if (cp && cp->count && cp->req_secs) return true;
+    }
     if (ssp->have_nci_app) return true;
     return false;
 }
@@ -1341,6 +1351,11 @@ void process_request(char* code_sign_key) {
             && !g_request->results_truncated
         ) {
             if (resend_lost_work()) {
+                if (config.debug_send) {
+                    log_messages.printf(MSG_NORMAL,
+                        "[send] Resent lost jobs, don't send more\n"
+                    );
+                }
                 ok_to_send_work = false;
             }
         }

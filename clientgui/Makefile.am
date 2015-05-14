@@ -50,8 +50,10 @@ boincmgr_SOURCES = \
     DlgDiagnosticLogFlags.cpp \
     DlgEventLog.cpp \
     DlgEventLogListCtrl.cpp \
+    DlgExclusiveApps.cpp \
     DlgExitMessage.cpp \
     DlgGenericMessage.cpp \
+    DlgHiddenColumns.cpp \
     DlgItemProperties.cpp \
     DlgOptions.cpp \
     DlgSelectComputer.cpp \
@@ -65,6 +67,7 @@ boincmgr_SOURCES = \
     ProjectInfoPage.cpp \
     ProjectProcessingPage.cpp \
     ProjectPropertiesPage.cpp \
+	ProjectWelcomePage.cpp \
     ProxyInfoPage.cpp \
     ProxyPage.cpp \
     sg_BoincSimpleFrame.cpp \
@@ -90,7 +93,6 @@ boincmgr_SOURCES = \
     ViewStatistics.cpp \
     ViewTransfers.cpp \
     ViewWork.cpp \
-    WelcomePage.cpp \
     WizardAttach.cpp \
     wizardex.cpp
 
@@ -100,9 +102,9 @@ EXTRA_DIST = *.h \
     ../lib/error_numbers.h \
     locale
 
-boincmgr_CPPFLAGS = $(AM_CPPFLAGS) $(WX_CPPFLAGS) $(SQLITE3_CPPFLAGS) $(LIBNOTIFY_CFLAGS) $(CLIENTGUIFLAGS) `pkg-config --cflags gtk+-2.0`
-boincmgr_CXXFLAGS = $(AM_CXXFLAGS) $(WX_CXXFLAGS) $(SQLITE3_CPPFLAGS) $(LIBNOTIFY_CFLAGS) $(CLIENTGUIFLAGS) `pkg-config --cflags gtk+-2.0`
-boincmgr_LDFLAGS = $(LIBBOINC) $(SQLITE3_LIBS) $(LIBNOTIFY_LIBS) $(CLIENTGUILIBS) $(BOINC_EXTRA_LIBS) $(CLIENTLIBS) `pkg-config --libs gtk+-2.0` -lnotify
+boincmgr_CPPFLAGS = $(AM_CPPFLAGS) $(WX_CPPFLAGS) $(SQLITE3_CPPFLAGS) $(LIBNOTIFY_CFLAGS) $(CLIENTGUIFLAGS) $(GTK_CLFAGS)
+boincmgr_CXXFLAGS = $(AM_CXXFLAGS) $(WX_CXXFLAGS) $(SQLITE3_CPPFLAGS) $(LIBNOTIFY_CFLAGS) $(CLIENTGUIFLAGS) $(GTK_CFLAGS)
+boincmgr_LDADD = $(LIBBOINC) $(SQLITE3_LIBS) $(LIBNOTIFY_LIBS) $(CLIENTGUILIBS) $(BOINC_EXTRA_LIBS) $(CLIENTLIBS) $(GTK_LIBS)
 
 win_config.h: $(top_srcdir)/config.h
 	grep '#define.*BOINC.*VERSION' $^ > $@

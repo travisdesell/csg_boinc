@@ -109,13 +109,16 @@ int main(int argc, char *argv[])
     // Expand the installer package
     system("rm -dfR /tmp/BOINC.pkg");
     system("rm -dfR /tmp/expanded_BOINC.pkg");
+    system("rm -f /tmp/BOINC_preferred_languages");
+    system("rm -f /tmp/BOINC_restart_flag");
+
     sprintf(temp, "pkgutil --expand \"%s\" /tmp/expanded_BOINC.pkg", pkgPath);
     err = system(temp);
-
+    
     if (err == noErr) {
         GetPreferredLanguages();
     }
-    if (compareOSVersionTo(10, 5) < 0) {
+    if (compareOSVersionTo(10, 6) < 0) {
         LoadPreferredLanguages();
         ::SetFrontProcess(&ourPSN);
         p = strrchr(brand, ' ');         // Strip off last space character and everything following
@@ -164,6 +167,8 @@ int main(int argc, char *argv[])
         }
     }
 
+    system("rm -fR /tmp/expanded_BOINC.pkg");
+
     sprintf(temp, "open \"%s\" &", pkgPath);
     system(temp);
     
@@ -200,6 +205,10 @@ Boolean IsRestartNeeded()
     gid_t           boinc_master_gid = 0, boinc_project_gid = 0;
     uid_t           boinc_master_uid = 0, boinc_project_uid = 0;
     char            loginName[256];
+    
+    if (compareOSVersionTo(10, 9) >= 0) {
+        return false;
+    }
     
     grp = getgrnam(boinc_master_group_name);
     if (grp == NULL)

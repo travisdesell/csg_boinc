@@ -142,6 +142,7 @@ int SCHED_CONFIG::parse(FILE* f) {
         if (xp.parse_bool("non_cpu_intensive", non_cpu_intensive)) continue;
         if (xp.parse_bool("verify_files_on_app_start", verify_files_on_app_start)) continue;
         if (xp.parse_int("homogeneous_redundancy", homogeneous_redundancy)) continue;
+        if (xp.parse_bool("hr_class_static", hr_class_static)) continue;
         if (xp.parse_bool("hr_allocate_slots", hr_allocate_slots)) continue;
         if (xp.parse_bool("msg_to_host", msg_to_host)) continue;
         if (xp.parse_bool("ignore_upload_certificates", ignore_upload_certificates)) continue;
@@ -296,6 +297,7 @@ int SCHED_CONFIG::parse(FILE* f) {
         if (xp.parse_bool("prefer_primary_platform", prefer_primary_platform)) continue;
         if (xp.parse_double("version_select_random_factor", version_select_random_factor)) continue;
         if (xp.parse_double("maintenance_delay", maintenance_delay)) continue;
+        if (xp.parse_bool("credit_by_app", credit_by_app)) continue;
 
         //////////// SCHEDULER LOG FLAGS /////////
 

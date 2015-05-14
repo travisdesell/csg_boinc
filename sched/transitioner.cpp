@@ -25,6 +25,7 @@
 //   [ --d x ]               debug level x
 //   [ --mod n i ]           process only WUs with (id mod n) == i
 //   [ --sleep_interval x ]  sleep x seconds if nothing to do
+//   [ --wu_id n ]           transition WU n (debugging)
 
 #include "config.h"
 #include <vector>
@@ -67,6 +68,7 @@ int mod_n, mod_i;
 bool do_mod = false;
 bool one_pass = false;
 int sleep_interval = DEFAULT_SLEEP_INTERVAL;
+int wu_id = 0;
 
 void signal_handler(int) {
     log_messages.printf(MSG_NORMAL, "Signaled by simulator\n");
@@ -349,8 +351,10 @@ int handle_wu(
     // also reset app version ID if using HAV
     //
     if (nerrors && !(nsuccess || ninprogress || nno_reply)) {
-        wu_item.hr_class = 0;
-        wu_item.app_version_id = 0;
+        if (!config.hr_class_static) {
+            wu_item.hr_class = 0;
+            wu_item.app_version_id = 0;
+        }
     }
 
     if (nerrors > wu_item.max_error_results) {
@@ -690,6 +694,11 @@ bool do_pass() {
     // loop over entries that are due to be checked
     //
     while (1) {
+        if (wu_id) {
+            // kludge to tell enumerate to return a given WU
+            mod_n = 1;
+            mod_i = wu_id;
+        }
         retval = transitioner.enumerate(
             (int)time(0), SELECT_LIMIT, mod_n, mod_i, items
         );
@@ -714,6 +723,7 @@ bool do_pass() {
         }
 
         if (!one_pass) check_stop_daemons();
+        if (wu_id) break;
     }
     return did_something;
 }
@@ -731,8 +741,10 @@ void main_loop() {
 
     while (1) {
         log_messages.printf(MSG_DEBUG, "doing a pass\n");
-        if (!do_pass()) {
+        if (1) {
+            bool did_something = do_pass();
             if (one_pass) break;
+            if (did_something) continue;
 #ifdef GCL_SIMULATOR
             continue_simulation("transitioner");
             signal(SIGUSR2, simulator_signal_handler);
@@ -802,6 +814,9 @@ int main(int argc, char** argv) {
         } else if (is_arg(argv[i], "v") || is_arg(argv[i], "version")) {
             printf("%s\n", SVN_VERSION);
             exit(0);
+        } else if (is_arg(argv[i], "wu_id")) {
+            wu_id = atoi(argv[++i]);
+            one_pass = true;
         } else {
             log_messages.printf(MSG_CRITICAL, "unknown command line argument: %s\n\n", argv[i]);
             usage(argv[0]);

@@ -105,7 +105,7 @@ echo "</td>
     <input type=\"hidden\" name=\"id\" value=\"$forum->id\">
 ";
 echo select_from_array("sort", $forum_sort_styles, $sort_style);
-echo "<input type=\"submit\" value=\"Sort\">
+echo "<input class=\"btn btn-default\" type=\"submit\" value=\"Sort\">
     </td>
     </tr>
     </table>
@@ -161,6 +161,7 @@ function show_forum($forum, $start, $sort_style, $user) {
     $n = 0; $i=0;
     foreach ($threads as $thread) {
         $owner = BoincUser::lookup_id($thread->owner);
+        if (!$owner) continue;
         $unread = thread_is_unread($user, $thread);
 
         //if ($thread->status==1){
@@ -216,7 +217,7 @@ function show_forum($forum, $start, $sort_style, $user) {
 
         echo '
             <td class="numbers">'.($thread->replies+1).'</td>
-            <td>'.user_links($owner).'</td>
+            <td>'.user_links($owner, BADGE_HEIGHT_SMALL).'</td>
             <td class="numbers">'.$thread->views.'</td>
             <td class="lastpost">'.time_diff_str($thread->timestamp, time()).'</td>
             </tr>

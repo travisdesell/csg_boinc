@@ -77,6 +77,7 @@ using std::vector;
 struct CLIENT_STATE {
     vector<PLATFORM> platforms;
     vector<PROJECT*> projects;
+        // in alphabetical order, to improve display
     vector<APP*> apps;
     vector<FILE_INFO*> file_infos;
     vector<APP_VERSION*> app_versions;
@@ -111,7 +112,7 @@ struct CLIENT_STATE {
 
     char language[16];                // ISO language code reported by GUI
     char client_brand[256];
-        // contents of client_brand.txt, e.g. "HTP Power to Give"
+        // contents of client_brand.txt, e.g. "HTC Power to Give"
         // reported to scheduler
     VERSION_INFO core_client_version;
     string statefile_platform_name;
@@ -456,6 +457,7 @@ struct CLIENT_STATE {
     int write_file_transfers_gui(MIOFILE&);
     int write_tasks_gui(MIOFILE&, bool);
     void sort_results();
+    void sort_projects_by_name();
 
 // --------------- cs_trickle.cpp:
     int read_trickle_files(PROJECT*, FILE*);

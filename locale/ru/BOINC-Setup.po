@@ -1,31 +1,26 @@
 # SOME DESCRIPTIVE TITLE.
 # Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
 # This file is distributed under the same license as the PACKAGE package.
-# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+# 
+# Translators:
 msgid ""
 msgstr ""
-"Project-Id-Version: PACKAGE VERSION\n"
+"Project-Id-Version: BOINC\n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2014-01-26 00:00-0800\n"
-"PO-Revision-Date: 2013-08-09 18:20+0200\n"
-"Last-Translator: Nikolay Saharov <saharovna@gmail.com>\n"
-"Language-Team: LANGUAGE <LL@li.org>\n"
-"Language: ru\n"
+"PO-Revision-Date: 2015-04-20 12:34+0000\n"
+"Last-Translator: Nikolay Sakharov <saharovna@gmail.com>\n"
+"Language-Team: Russian (http://www.transifex.com/projects/p/boinc/language/ru/)\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%"
-"10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
-"X-Generator: Poedit 1.5.5\n"
-"X-Poedit-SearchPath-0: mac_installer\n"
-"X-Poedit-SourceCharset: UTF-8\n"
-"X-Poedit-Basepath: /Volumes/Cheer/BOINC_GIT/boinc_trunk\n"
-"X-Poedit-KeywordsList: _\n"
+"Language: ru\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
 
 #: Installer.cpp:124
 #, c-format
 msgid "Sorry, this version of %s requires system 10.5 or higher."
-msgstr ""
+msgstr "Извините, данная версия %s требует систему 10.5 или выше."
 
 #: PostInstall.cpp:130 PostInstall.cpp:1136 uninstall.cpp:1618
 msgid "Yes"
@@ -42,24 +37,15 @@ msgstr "Должен ли BOINC работать, даже если пользо
 #: PostInstall.cpp:1416
 #, c-format
 msgid ""
-"Users who are permitted to administer this computer will automatically be "
-"allowed to run and control %s.\n"
+"Users who are permitted to administer this computer will automatically be allowed to run and control %s.\n"
 "\n"
-"Do you also want non-administrative users to be able to run and control %s "
-"on this Mac?"
-msgstr ""
-"Пользователи с правами администратора этого компьютера автоматически смогут "
-"запускать и управлять %s.\n"
-"\n"
-"Хотите ли вы, чтобы простые пользователи без административных прав также "
-"могли запускать и управлять %s на этом компьютере Mac?"
+"Do you also want non-administrative users to be able to run and control %s on this Mac?"
+msgstr "Пользователи с правами администратора этого компьютера автоматически смогут запускать и управлять %s.\n\nХотите ли вы, чтобы простые пользователи без административных прав также могли запускать и управлять %s на этом компьютере Mac?"
 
 #: PostInstall.cpp:1444
 #, c-format
 msgid "Do you want to set %s as the screensaver for all %s users on this Mac?"
-msgstr ""
-"Вы хотите установить %s как скринсейвер для всех пользователей %s на этом "
-"Mac?"
+msgstr "Вы хотите установить %s как скринсейвер для всех пользователей %s на этом Mac?"
 
 #: uninstall.cpp:82
 msgid "OK"
@@ -73,9 +59,7 @@ msgstr "Ошибка доступа после перезапуска"
 msgid ""
 "Removal may take several minutes.\n"
 "Please be patient."
-msgstr ""
-"Удаление может занять несколько минут.\n"
-"Пожалуйста, подождите."
+msgstr "Удаление может занять несколько минут.\nПожалуйста, подождите."
 
 #: uninstall.cpp:156
 #, c-format
@@ -83,10 +67,7 @@ msgid ""
 "Are you sure you want to completely remove %s from your computer?\n"
 "\n"
 "This will remove the executables but will not touch %s data files."
-msgstr ""
-"Вы уверены, что хотите полностью удалить %s с вашего компьютера?\n"
-"\n"
-"Будут удалены исполняемые файлы, но файлы данных %s останутся."
+msgstr "Вы уверены, что хотите полностью удалить %s с вашего компьютера?\n\nБудут удалены исполняемые файлы, но файлы данных %s останутся."
 
 #: uninstall.cpp:163
 #, c-format
@@ -106,7 +87,7 @@ msgstr "имя  пользователя"
 msgid ""
 "Do you also want to remove VirtualBox from your computer?\n"
 "(VirtualBox was installed along with BOINC.)"
-msgstr ""
+msgstr "Хотите ли Вы также удалить VirtualBox с вашего компьютера?\n(VirtualBox был установлен вместе с BOINC.)"
 
 #: uninstall.cpp:312
 #, c-format
@@ -118,24 +99,14 @@ msgid ""
 "\n"
 "for each user, the file\n"
 "\"%s\"."
-msgstr ""
-"Удаление завершено.\n"
-"\n"
-" Вы можете удалить следующие оставшиеся объекты с помощью Поисковика: \n"
-"каталог \"%s\"\n"
-"\n"
-"для каждого пользователя, файл\n"
-"\"%s\"."
+msgstr "Удаление завершено.\n\n Вы можете удалить следующие оставшиеся объекты с помощью Поисковика: \nкаталог \"%s\"\n\nдля каждого пользователя, файл\n\"%s\"."
 
 #: uninstall.cpp:840
 #, c-format
 msgid ""
-"Enter your administrator password to completely remove %s from you "
-"computer.\n"
+"Enter your administrator password to completely remove %s from you computer.\n"
 "\n"
-msgstr ""
-"Для полного удаления %s с вашего компьютера введите пароль администратора.\n"
-"\n"
+msgstr "Для полного удаления %s с вашего компьютера введите пароль администратора.\n\n"
 
 #: uninstall.cpp:1616
 msgid "Cancel"
@@ -144,25 +115,3 @@ msgstr "Отмена"
 #: uninstall.cpp:1617
 msgid "Continue..."
 msgstr "Продолжить..."
-
-#, c-format
-#~ msgid "Sorry, this version of %s requires system 10.4 or higher."
-#~ msgstr "Извините, данная версия %s требует систему 10.4 или выше."
-
-#~ msgid ""
-#~ "Removal completed.\n"
-#~ "\n"
-#~ " You may want to remove the following remaining items using the Finder: \n"
-#~ "\"/Library/Application Support/BOINC Data\" directory\n"
-#~ "\n"
-#~ "for each user, the file\n"
-#~ "\"/Users/[username]/Library/Preferences/BOINC Manager Preferences\"."
-#~ msgstr ""
-#~ "Удаление завершено.\n"
-#~ "\n"
-#~ "   Воспользуйтесь Поиском, если вы захотите удалить следующие оставшиеся "
-#~ "элементы: \n"
-#~ "каталог \"/Library/Application Support/BOINC Data\"\n"
-#~ "\n"
-#~ "для каждого пользователя, файл\n"
-#~ "\"/Users/[username]/Library/Preferences/BOINC Manager Preferences\"."

@@ -72,7 +72,6 @@ function output_transform($text, $options = NULL) {
         $options = new output_options; // Defaults in the class definition
     }
     if ($options->htmlitems) {
-        //$text = htmlentities($text);
         $text = htmlspecialchars($text);
     }
     if (is_array($options->highlight_terms)) {
@@ -105,25 +104,51 @@ function get_output_options($user) {
     return $options;
 }
 
-// Converts bbcode to proper HTML
+// Converts bbcode to HTML
 // If $export is true, don't use BOINC CSS
 
-// handle [pre] separately because we need to remove <br />s
+// handle [pre] and [code] separately because we need to remove <br />s
 //
-function replace_pre($text, $export) {
+function replace_pre_code($text, $export) {
     if ($export) {
-        return preg_replace_callback(
+        $text = preg_replace_callback(
             "@\[pre\](.*?)\[/pre\]@is",
             function ($matches) {
-                return "<pre>".remove_br(substr($matches[0], 5, -6))."</pre>";
+                $x = remove_br(substr($matches[0], 5, -6));
+                $x = htmlspecialchars($x, ENT_COMPAT, "UTF-8", false);
+                $x = str_replace("[", "&#91;", $x);
+                return "<pre>$x</pre>";
+            },
+            $text
+        );
+        return preg_replace_callback(
+            "@\[code\](.*?)\[/code\]@is",
+            function ($matches) {
+                $x = remove_br(substr($matches[0], 6, -7));
+                $x = htmlspecialchars($x, ENT_COMPAT, "UTF-8", false);
+                $x = str_replace("[", "&#91;", $x);
+                return "<code>$x</code>";
             },
             $text
         );
     } else {
-        return preg_replace_callback(
+        $text = preg_replace_callback(
             "@\[pre\](.*?)\[/pre\]@is",
             function ($matches) {
-                return "<div class=\"pre\">".remove_br(substr($matches[0], 5, -6))."</div>";
+                $x = remove_br(substr($matches[0], 5, -6));
+                $x = htmlspecialchars($x, ENT_COMPAT, "UTF-8", false);
+                $x = str_replace("[", "&#91;", $x);
+                return "<div class=\"pre\">$x</div>";
+            },
+            $text
+        );
+        return preg_replace_callback(
+            "@\[code\](.*?)\[/code\]@is",
+            function ($matches) {
+                $x = remove_br(substr($matches[0], 6, -7));
+                $x = htmlspecialchars($x, ENT_COMPAT, "UTF-8", false);
+                $x = str_replace("[", "&#91;", $x);
+                return "<div class=\"code\">$x</div>";
             },
             $text
         );
@@ -135,7 +160,6 @@ function bb2html($text, $export=false) {
     $httpsregex = "(?:\"?)https\:\/\/([^\[\"<\ ]+)(?:\"?)";
     // List of allowable tags
     $bbtags = array (
-        "@\[code\](.*?)\[/code\]@is",
         "@\[b\](.*?)\[/b\]@is",
         "@\[i\](.*?)\[/i\]@is",
         "@\[u\](.*?)\[/u\]@is",
@@ -170,7 +194,6 @@ function bb2html($text, $export=false) {
     // What the above tags are turned in to
     if ($export) {
         $htmltags = array (
-            "<code>\\1</code>",
             "<b>\\1</b>",
             "<i>\\1</i>",
             "<u>\\1</u>",
@@ -200,7 +223,6 @@ function bb2html($text, $export=false) {
         );
     } else {
         $htmltags = array (
-            "<div class=\"code\">\\1</div>",
             "<b>\\1</b>",
             "<i>\\1</i>",
             "<u>\\1</u>",
@@ -236,7 +258,7 @@ function bb2html($text, $export=false) {
     // $i<1000 to prevent DoS
     while ($text != $lasttext && $i<1000) {
         $lasttext = $text;
-        $text = replace_pre($text, $export);
+        $text = replace_pre_code($text, $export);
         $text = preg_replace($bbtags, $htmltags, $text);
         $i = $i + 1;
     }
@@ -252,16 +274,24 @@ function remove_br($text){
 }
 
 // Make links open in new windows.
+//
 function externalize_links($text) {
     // TODO:  Convert this to PCRE
-    $i=0;$linkpos=true;
-    while (true){                                //Find a link
-        $linkpos=strpos($text,"<a ",$i);
+    $i=0;
+    $linkpos=true;
+    $out = "";
+    while (true){
+        //Find a link
+        //
+        $linkpos=strpos($text, "<a ", $i);
         if ($linkpos===false) break;
-        $out.= substr($text,$i,$linkpos-$i)."<a target=\"_new\" ";        //Replace with target='_new'
-        $i=$linkpos+3;
+
+        //Replace with target='_new'
+        //
+        $out .= substr($text, $i, $linkpos-$i)."<a target=\"_new\" ";
+        $i = $linkpos+3;
     }
-    $out.=substr($text,$i);
+    $out .= substr($text, $i);
     return $out;
 }
 

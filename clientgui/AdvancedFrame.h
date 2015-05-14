@@ -23,6 +23,7 @@
 #pragma interface "AdvancedFrame.cpp"
 #endif
 
+#include "BOINCBaseFrame.h"
 
 class CBOINCBaseView;
 class CDlgEventLog;
@@ -61,7 +62,7 @@ public:
     void OnChangeView( wxCommandEvent& event );
     void OnChangeGUI( wxCommandEvent& event );
 
-    void OnWizardAttach( wxCommandEvent& event );
+    void OnWizardAttachProject( wxCommandEvent& event );
     void OnWizardUpdate( wxCommandEvent& event );
     void OnWizardDetach( wxCommandEvent& event );
 
@@ -69,9 +70,12 @@ public:
     void OnGPUSelection( wxCommandEvent& event );
     void OnNetworkSelection( wxCommandEvent& event );
 
+    void OnMenuOpening( wxMenuEvent &event);
     void OnOptions( wxCommandEvent& event );
 	void OnPreferences( wxCommandEvent& event );
+    void OnExclusiveApps( wxCommandEvent& event );
 	void OnDiagnosticLogFlags( wxCommandEvent& event );
+    void OnSelectColumns( wxCommandEvent& event );
     void OnSelectComputer( wxCommandEvent& event );
     void OnClientShutdown( wxCommandEvent& event );
     void OnRunBenchmarks( wxCommandEvent& event );
@@ -100,6 +104,7 @@ public:
 
     bool RestoreState();
     bool SaveState();
+    wxNotebook* GetNotebook();
 
 #ifdef __WXMAC__
     void                OnKeyPressed(wxKeyEvent &event);

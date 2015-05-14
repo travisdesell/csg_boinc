@@ -119,7 +119,7 @@
     <ClCompile>
       <Optimization>MaxSpeed</Optimization>
       <AdditionalIncludeDirectories>..;..\..\boinc_depends_win_vs2010\wxwidgets\include;..\..\boinc_depends_win_vs2010\wxwidgets\mswin\$(Platform)\$(Configuration)\lib\vc_lib\mswu;..\..\boinc_depends_win_vs2010\sqlite3\include;..\lib;..\api;..\clientgui;..\client\win;../coprocs/OpenCL/include</AdditionalIncludeDirectories>
-      <PreprocessorDefinitions>WIN32;_WIN32;NDEBUG;_WINDOWS;_MT;_UNICODE;UNICODE;wxUSE_GUI=1</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;_WIN32;NDEBUG;_WINDOWS;_MT;_UNICODE;UNICODE;wxUSE_GUI=1;wxDEBUG_LEVEL=0</PreprocessorDefinitions>
       <StringPooling>true</StringPooling>
       <ExceptionHandling>Async</ExceptionHandling>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
@@ -163,7 +163,7 @@
     <ClCompile>
       <Optimization>MaxSpeed</Optimization>
       <AdditionalIncludeDirectories>..;..\..\boinc_depends_win_vs2010\wxwidgets\include;..\..\boinc_depends_win_vs2010\wxwidgets\mswin\$(Platform)\$(Configuration)\lib\vc_lib\mswu;..\..\boinc_depends_win_vs2010\sqlite3\include;..\lib;..\api;..\clientgui;..\client\win;../coprocs/OpenCL/include</AdditionalIncludeDirectories>
-      <PreprocessorDefinitions>WIN32;_WIN32;NDEBUG;_WINDOWS;_MT;_UNICODE;UNICODE;wxUSE_GUI=1</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;_WIN32;NDEBUG;_WINDOWS;_MT;_UNICODE;UNICODE;wxUSE_GUI=1;wxDEBUG_LEVEL=0</PreprocessorDefinitions>
       <StringPooling>true</StringPooling>
       <ExceptionHandling>Async</ExceptionHandling>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
@@ -301,6 +301,9 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\clientgui\DlgDiagnosticLogFlags.cpp" />
+    <ClCompile Include="..\clientgui\DlgExclusiveApps.cpp" />
+    <ClCompile Include="..\clientgui\DlgHiddenColumns.cpp" />
+    <ClCompile Include="..\clientgui\ProjectWelcomePage.cpp" />
     <ClCompile Include="..\clientgui\sg_BoincSimpleFrame.cpp" />
     <ClCompile Include="..\clientgui\sg_CustomControls.cpp" />
     <ClCompile Include="..\clientgui\sg_DlgMessages.cpp" />
@@ -321,10 +324,7 @@
     <ClCompile Include="..\lib\filesys.cpp" />
     <ClCompile Include="..\lib\hostinfo.cpp" />
     <ClCompile Include="..\lib\idlemon_win.cpp" />
-    <ClCompile Include="..\lib\md5.c">
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">CompileAsCpp</CompileAs>
-      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">CompileAsCpp</CompileAs>
-    </ClCompile>
+    <ClCompile Include="..\lib\md5.cpp" />
     <ClCompile Include="..\lib\md5_file.cpp" />
     <ClCompile Include="..\lib\mfile.cpp" />
     <ClCompile Include="..\lib\miofile.cpp" />
@@ -359,7 +359,6 @@
     <ClCompile Include="..\clientgui\ProxyPage.cpp" />
     <ClCompile Include="..\clientgui\TermsOfUsePage.cpp" />
     <ClCompile Include="..\clientgui\UnavailablePage.cpp" />
-    <ClCompile Include="..\clientgui\WelcomePage.cpp" />
     <ClCompile Include="..\clientgui\WizardAttach.cpp" />
     <ClCompile Include="..\clientgui\BOINCBaseWizard.cpp" />
     <ClCompile Include="..\clientgui\wizardex.cpp" />
@@ -410,6 +409,9 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\clientgui\DlgDiagnosticLogFlags.h" />
+    <ClInclude Include="..\clientgui\DlgExclusiveApps.h" />
+    <ClInclude Include="..\clientgui\DlgHiddenColumns.h" />
+    <ClInclude Include="..\clientgui\ProjectWelcomePage.h" />
     <ClInclude Include="..\clientgui\sg_BoincSimpleFrame.h" />
     <ClInclude Include="..\clientgui\sg_CustomControls.h" />
     <ClInclude Include="..\clientgui\sg_DlgMessages.h" />
@@ -465,7 +467,6 @@
     <ClInclude Include="..\clientgui\ProxyPage.h" />
     <ClInclude Include="..\clientgui\TermsOfUsePage.h" />
     <ClInclude Include="..\clientgui\UnavailablePage.h" />
-    <ClInclude Include="..\clientgui\WelcomePage.h" />
     <ClInclude Include="..\clientgui\WizardAttach.h" />
     <ClInclude Include="..\clientgui\BOINCBaseWizard.h" />
     <ClInclude Include="..\clientgui\wizardex.h" />

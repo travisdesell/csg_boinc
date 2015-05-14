@@ -29,6 +29,7 @@
 #include "BOINCGUIApp.h"
 #include "BOINCBaseFrame.h"
 #include "SkinManager.h"
+#include "MainDocument.h"
 #include "version.h"
 
 
@@ -93,6 +94,9 @@ void CSkinImage::Clear() {
     m_strDesiredBackgroundColor.Clear();
     m_bmpBitmap = wxNullBitmap;
     m_colBackgroundColor = wxNullColour;
+    m_iAnchorHorizontal = -1;
+    m_iAnchorVertical = -1;
+    
 }
 
 
@@ -115,6 +119,18 @@ int CSkinImage::Parse(MIOFILE& in) {
                 m_strDesiredBackgroundColor = wxString(strBuffer.c_str(), wxConvUTF8);
             }
             continue;
+        } else if (match_tag(buf, "<anchor_horizontal_left>")) {
+            m_iAnchorHorizontal = BKGD_ANCHOR_HORIZ_LEFT;
+        } else if (match_tag(buf, "<anchor_horizontal_center>")) {
+            m_iAnchorHorizontal = BKGD_ANCHOR_HORIZ_CENTER;
+        } else if (match_tag(buf, "<anchor_horizontal_right>")) {
+            m_iAnchorHorizontal = BKGD_ANCHOR_HORIZ_RIGHT;
+        } else if (match_tag(buf, "<anchor_vertical_top>")) {
+            m_iAnchorVertical = BKGD_ANCHOR_VERT_TOP;;
+        } else if (match_tag(buf, "<anchor_vertical_center>")) {
+            m_iAnchorVertical = BKGD_ANCHOR_VERT_CENTER;;
+        } else if (match_tag(buf, "<anchor_vertical_bottom>")) {
+            m_iAnchorVertical = BKGD_ANCHOR_VERT_BOTTOM;;
         }
     }
 
@@ -141,10 +157,21 @@ bool CSkinImage::SetDefaults(wxString strComponentName, const char** ppDefaultBi
 }
 
 
-bool CSkinImage::SetDefaults(wxString strComponentName, const char** ppDefaultBitmap, wxString strBackgroundColor) {
+bool CSkinImage::SetDefaults(wxString strComponentName,
+                                const char** ppDefaultBitmap,
+                                wxString strBackgroundColor,
+                                int horizontalAnchor,
+                                int verticalAnchor
+                            ) {
     m_strComponentName = strComponentName;
     m_ppDefaultBitmap = ppDefaultBitmap;
     m_strDefaultBackgroundColor = strBackgroundColor;
+    if (m_iAnchorHorizontal < 0) {
+        m_iAnchorHorizontal = horizontalAnchor;
+    }
+    if (m_iAnchorVertical < 0) {
+        m_iAnchorVertical = verticalAnchor;
+    }
     return true;
 }
 
@@ -152,13 +179,25 @@ bool CSkinImage::SetDefaults(wxString strComponentName, const char** ppDefaultBi
 bool CSkinImage::Validate() {
     if (!m_bmpBitmap.Ok()) {
         if (!m_strDesiredBitmap.IsEmpty()) {
-            m_bmpBitmap = wxBitmap(wxImage(m_strDesiredBitmap, wxBITMAP_TYPE_ANY));
+            wxImage img = wxImage(m_strDesiredBitmap, wxBITMAP_TYPE_ANY);
+            if (img.IsOk()) {
+#ifdef __WXMSW__
+// TODO: Choose from multiple size images if provided, else resize the closest one
+                if ((GetXDPIScaling() > 1.05) || (GetYDPIScaling() > 1.05)) {
+                    img.Rescale((int) (img.GetWidth()*GetXDPIScaling()), 
+                                (int) (img.GetHeight()*GetYDPIScaling()), 
+                                wxIMAGE_QUALITY_BILINEAR
+                            );
+                }
+#endif
+                m_bmpBitmap = wxBitmap(img);
+            }
         }
         if (!m_bmpBitmap.Ok()) {
             if (show_error_msgs) {
                 fprintf(stderr, "Skin Manager: Failed to load '%s' image. Using default.\n", (const char *)m_strComponentName.mb_str());
             }
-            m_bmpBitmap = wxBitmap(m_ppDefaultBitmap);
+            m_bmpBitmap = GetScaledBitmapFromXPMData(m_ppDefaultBitmap);
             wxASSERT(m_bmpBitmap.Ok());
         }
     }
@@ -394,10 +433,12 @@ int CSkinSimple::Parse(MIOFILE& in) {
 
 bool CSkinSimple::InitializeDelayedValidation() {
     m_BackgroundImage.SetDefaults(
-        wxT("background"), (const char**)background_image_xpm, wxT("211:211:211")
+        wxT("background"), (const char**)background_image_xpm,
+        wxT("211:211:211"), BKGD_ANCHOR_HORIZ_LEFT, BKGD_ANCHOR_VERT_TOP
     );
     m_DialogBackgroundImage.SetDefaults(
-        wxT("dialog background"), (const char**)dialog_background_image_xpm, wxT("211:211:211")
+        wxT("dialog background"), (const char**)dialog_background_image_xpm,
+        wxT("255:255:255"), BKGD_ANCHOR_HORIZ_CENTER, BKGD_ANCHOR_VERT_CENTER
     );
     m_ProjectImage.SetDefaults(
         wxT("project"), (const char**)project_image_xpm
@@ -480,7 +521,19 @@ int CSkinAdvanced::Parse(MIOFILE& in) {
                     wxString(strBuffer.c_str(), wxConvUTF8)
                 );
                 if (boinc_file_exists(str.c_str())) {
-                    m_bitmapApplicationLogo = wxBitmap(wxImage(str.c_str(), wxBITMAP_TYPE_ANY));
+                    wxImage img = wxImage(str.c_str(), wxBITMAP_TYPE_ANY);
+                    if (img.IsOk()) {
+#ifdef __WXMSW__
+// TODO: Choose from multiple size images if provided, else resize the closest one
+                        if ((GetXDPIScaling() > 1.05) || (GetYDPIScaling() > 1.05)) {
+                            img.Rescale((int) (img.GetWidth()*GetXDPIScaling()), 
+                                        (int) (img.GetHeight()*GetYDPIScaling()), 
+                                        wxIMAGE_QUALITY_BILINEAR
+                                    );
+                        }
+#endif
+                        m_bitmapApplicationLogo = wxBitmap(img);
+                    }
                 }
             }
             continue;

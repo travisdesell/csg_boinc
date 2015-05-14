@@ -99,11 +99,7 @@ if ($temp_sort_style) {
     }
 }
 
-if ($logged_in_user && $logged_in_user->prefs->jump_to_unread){
-    page_head($title, 'jumpToUnread();');
-} else {
-    page_head($title);
-}
+page_head($title, 'jumpToUnread();');
 
 $is_subscribed = $logged_in_user && BoincSubscription::lookup($logged_in_user->id, $thread->id);
 
@@ -185,7 +181,7 @@ if ($is_subscribed) {
     );
 }
 
-//If the logged in user is moderator enable some extra features
+// If the logged in user is moderator enable some extra features
 //
 if (is_moderator($logged_in_user, $forum)) {
     if ($thread->hidden){
@@ -268,11 +264,12 @@ if (is_news_forum($forum) && $logged_in_user && ($logged_in_user->id == $thread-
 }
 
 // Display a box that allows the user to select sorting of the posts
+//
 echo "</td><td align=\"right\">
     <input type=\"hidden\" name=\"id\" value=\"", $thread->id, "\">" .
     tra("Sort");
 echo select_from_array("sort", $thread_sort_styles, $sort_style);
-echo "<input type=\"submit\" value=\"".tra('Sort')."\">
+echo "<input class=\"btn btn-default\" type=\"submit\" value=\"".tra('Sort')."\">
     </td></tr></table></form>
 ";
 

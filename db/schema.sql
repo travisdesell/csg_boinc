@@ -1,5 +1,5 @@
 /*  If you add/change anything, update
-    boinc_db.C,h
+    boinc_db.cpp,h
     and if needed:
     py/Boinc/
         database.py
@@ -13,8 +13,8 @@
             create_account_action.php (user)
             team_create_action.php (team)
     sched/
-        db_dump.C (host, user, team)
-        db_purge.C (workunit, result)
+        db_dump.cpp (host, user, team)
+        db_purge.cpp (workunit, result)
 */
 /* Fields are documented in boinc_db.h */
 /* Do not replace this with an automatically generated schema */
@@ -330,7 +330,8 @@ create table user_submit (
         -- manager privileges for all apps
         -- grant/revoke permissions (except manage), change quotas
         -- create apps
-    max_jobs_in_progress    integer         not null
+    max_jobs_in_progress    integer         not null,
+    primary key (user_id)
 ) engine = InnoDB;
 
 -- (user, app) submit permissions
@@ -339,11 +340,12 @@ create table user_submit (
 create table user_submit_app (
     user_id                 integer         not null,
     app_id                  integer         not null,
-    manage                  tinyint         not null
+    manage                  tinyint         not null,
         -- can
         --   create/deprecated app versions of this app
         --   grant/revoke permissions (except admin) this app
         --   abort their jobs
+    primary key (user_id, app_id)
 ) engine = InnoDB;
 
 -- Record files present on server.
@@ -441,18 +443,18 @@ create table forum (
     orderID                 integer         not null,
     title                   varchar(254)    not null,
     description             varchar(254)    not null,
-    timestamp               integer         not null,
+    timestamp               integer         not null default 0,
         -- time of last new or modified thread or post
-    threads                 integer         not null,
+    threads                 integer         not null default 0,
         -- number of non-hidden threads in forum
-    posts                   integer         not null,
-    rate_min_expavg_credit  integer         not null,
-    rate_min_total_credit   integer         not null,
-    post_min_interval       integer         not null,
-    post_min_expavg_credit  integer         not null,
-    post_min_total_credit   integer         not null,
+    posts                   integer         not null default 0,
+    rate_min_expavg_credit  integer         not null default 0,
+    rate_min_total_credit   integer         not null default 0,
+    post_min_interval       integer         not null default 0,
+    post_min_expavg_credit  integer         not null default 0,
+    post_min_total_credit   integer         not null default 0,
     is_dev_blog             tinyint         not null default 0,
-    parent_type             integer         not null,
+    parent_type             integer         not null default 0,
         -- entity type to which this forum is attached:
         -- 0 == category (public)
         -- 1 == team
@@ -731,3 +733,25 @@ create table badge_team (
     create_time             double          not null,
     reassign_time           double          not null
 );
+
+create table credit_user (
+    userid                  integer         not null,
+    appid                   integer         not null,
+    njobs                   integer         not null,
+    total                   double          not null,
+    expavg                  double          not null,
+    expavg_time             double          not null,
+    credit_type             integer         not null,
+    primary key (userid, appid, credit_type)
+) engine=InnoDB;
+
+create table credit_team (
+    teamid                  integer         not null,
+    appid                   integer         not null,
+    njobs                   integer         not null,
+    total                   double          not null,
+    expavg                  double          not null,
+    expavg_time             double          not null,
+    credit_type             integer         not null,
+    primary key (teamid, appid, credit_type)
+) engine=InnoDB;

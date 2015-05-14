@@ -292,7 +292,7 @@ struct SCHEDULER_REQUEST {
     char code_sign_key[4096];
     bool dont_send_work;
     char client_brand[256];
-        // as specifiedc in client_brand.txt config file on client
+        // as specified in client_brand.txt config file on client
 
     std::vector<CLIENT_APP_VERSION> client_app_versions;
 
@@ -398,9 +398,6 @@ struct WORK_REQ_BASE {
         // instance-seconds requested
     double req_instances[NPROC_TYPES];
         // number of idle instances, use if possible
-    inline bool need_proc_type(int t) {
-        return (req_secs[t]>0) || (req_instances[t]>0);
-    }
     inline void clear_req(int proc_type) {
         req_secs[proc_type] = 0;
         req_instances[proc_type] = 0;
@@ -413,6 +410,13 @@ struct WORK_REQ_BASE {
     // true if new-type request, which has resource-specific requests
     //
     bool rsc_spec_request;
+
+    inline bool need_proc_type(int t) {
+        if (rsc_spec_request) {
+            return (req_secs[t]>0) || (req_instances[t]>0);
+        }
+        return seconds_to_fill > 0;
+    }
 
     double disk_available;
     double ram, usable_ram;

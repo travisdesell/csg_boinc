@@ -143,7 +143,7 @@ void handle_sr_feeds(vector<RSS_FEED>& feeds, PROJ_AM* p) {
     while (iter != p->proj_feeds.end()) {
         RSS_FEED& rf = *iter;
         if (rf.found) {
-            iter++;
+            ++iter;
         } else {
             iter = p->proj_feeds.erase(iter);
             feed_set_changed = true;
@@ -286,8 +286,12 @@ static inline bool string_equal_nodigits(string& s1, string& s2) {
 }
 
 static inline bool same_text(NOTICE& n1, NOTICE& n2) {
-    if (strcmp(n1.title, n2.title)) return false;
-    if (!string_equal_nodigits(n1.description, n2.description)) return false;
+    if (strcmp(n1.title, n2.title)) {
+        return false;
+    }
+    if (!string_equal_nodigits(n1.description, n2.description)) {
+        return false;
+    }
     return true;
 }
 
@@ -296,7 +300,7 @@ void NOTICES::clear_keep() {
     while (i != notices.end()) {
         NOTICE& n = *i;
         n.keep = false;
-        i++;
+        ++i;
     }
 }
 
@@ -309,7 +313,7 @@ void NOTICES::unkeep(const char* url) {
             i = notices.erase(i);
             removed_something = true;
         } else {
-            i++;
+            ++i;
         }
     }
 #ifndef SIM
@@ -319,10 +323,12 @@ void NOTICES::unkeep(const char* url) {
 #endif
 }
 
+#if 0
 static inline bool same_guid(NOTICE& n1, NOTICE& n2) {
     if (!strlen(n1.guid)) return false;
     return !strcmp(n1.guid, n2.guid);
 }
+#endif
 
 // we're considering adding a notice n.
 // If there's already an identical message n2
@@ -340,11 +346,24 @@ bool NOTICES::remove_dups(NOTICE& n) {
     double min_time = gstate.now - 30*86400;
     while (i != notices.end()) {
         NOTICE& n2 = *i;
+
+        if (log_flags.notice_debug) {
+            msg_printf(0, MSG_INFO,
+                "[notice] scanning old notice %d: %s",
+                n2.seqno, strlen(n2.title)?n2.title:n2.description.c_str()
+            );
+        }
         if (n2.arrival_time < min_time
             || (n2.create_time && n2.create_time < min_time)
         ) {
             i = notices.erase(i);
             removed_something = true;
+            if (log_flags.notice_debug) {
+                msg_printf(0, MSG_INFO,
+                    "[notice] removing old notice %d: %s",
+                    n2.seqno, strlen(n2.title)?n2.title:n2.description.c_str()
+                );
+            }
 #if 0
         // this check prevents news item edits from showing; skip it
         } else if (same_guid(n, n2)) {
@@ -363,10 +382,20 @@ bool NOTICES::remove_dups(NOTICE& n) {
             if (n.create_time > n2.create_time + min_diff) {
                 i = notices.erase(i);
                 removed_something = true;
+                if (log_flags.notice_debug) {
+                    msg_printf(0, MSG_INFO,
+                        "[notice] replacing identical older notice %d", n2.seqno
+                    );
+                }
             } else {
                 n2.keep = true;
                 retval = false;
                 ++i;
+                if (log_flags.notice_debug) {
+                    msg_printf(0, MSG_INFO,
+                        "[notice] keeping identical older notice %d", n2.seqno
+                    );
+                }
             }
         } else {
             ++i;
@@ -383,6 +412,12 @@ bool NOTICES::remove_dups(NOTICE& n) {
 // add a notice.
 // 
 bool NOTICES::append(NOTICE& n) {
+    if (log_flags.notice_debug) {
+        msg_printf(0, MSG_INFO,
+            "[notice] processing notice: %s",
+            strlen(n.title)?n.title:n.description.c_str()
+        );
+    }
     if (!remove_dups(n)) {
         return false;
     }
@@ -393,8 +428,7 @@ bool NOTICES::append(NOTICE& n) {
     }
     if (log_flags.notice_debug) {
         msg_printf(0, MSG_INFO,
-            "[notice] appending notice %d: %s",
-            n.seqno, strlen(n.title)?n.title:n.description.c_str()
+            "[notice] adding notice %d", n.seqno
         );
     }
     notices.push_front(n);
@@ -511,6 +545,9 @@ void NOTICES::remove_notices(PROJECT* p, int which) {
             break;
         case REMOVE_APP_INFO_MSG:
             remove = (strstr(n.description.c_str(), "app_info.xml") != NULL);
+            break;
+        case REMOVE_APP_CONFIG_MSG:
+            remove = (strstr(n.description.c_str(), "app_config.xml") != NULL);
             break;
         }
         if (remove) {
@@ -915,7 +952,7 @@ void RSS_FEEDS::update_feed_list() {
     while (iter != feeds.end()) {
         RSS_FEED& rf = *iter;
         if (rf.found) {
-            iter++;
+            ++iter;
         } else {
             // cancel op if active
             //

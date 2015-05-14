@@ -39,6 +39,8 @@
 #endif
 
 #include "error_numbers.h"
+#include "str_util.h"
+#include "util.h"
 
 #include "network.h"
 
@@ -146,8 +148,12 @@ int resolve_hostname(const char* hostname, sockaddr_storage &ip_addr) {
     if (!hep) {
         return ERR_GETHOSTBYNAME;
     }
-    ip_addr.sin_family = AF_INET;
-    ip_addr.sin_addr.s_addr = *(int*)hep->h_addr_list[0];
+    for (int i=0; ; i++) {
+        if (!hep->h_addr_list[i]) break;
+        ip_addr.sin_family = AF_INET;
+        ip_addr.sin_addr.s_addr = *(int*)hep->h_addr_list[i];
+        if ((ip_addr.sin_addr.s_addr&0xff) != 0x7f) return 0;     // look for non-loopback addr
+    }
     return 0;
 
 #else
@@ -159,10 +165,18 @@ int resolve_hostname(const char* hostname, sockaddr_storage &ip_addr) {
     hints.ai_protocol = IPPROTO_TCP;
     int retval = getaddrinfo(hostname, NULL, &hints, &res);
     if (retval) {
-        perror("getaddrinfo");
-        return retval;
+        char buf[256];
+        sprintf(buf, "%s: getaddrinfo", time_to_string(dtime()));
+        perror(buf);
+        return ERR_GETADDRINFO;
     }
-    memcpy(&ip_addr, res->ai_addr, res->ai_addrlen);
+    struct addrinfo* aip = res;
+    while (aip) {
+        memcpy(&ip_addr, aip->ai_addr, aip->ai_addrlen);
+        sockaddr_in* sin = (sockaddr_in*)&ip_addr;
+        if ((sin->sin_addr.s_addr&0xff) != 0x7f) break;
+        aip = aip->ai_next;
+    }
     freeaddrinfo(res);
     return 0;
 #endif
@@ -205,7 +219,9 @@ int resolve_hostname_or_ip_addr(
 int boinc_socket(int& fd, int protocol) {
     fd = (int)socket(protocol, SOCK_STREAM, 0);
     if (fd < 0) {
-        perror("socket");
+        char buf[256];
+        sprintf(buf, "%s: socket", time_to_string(dtime()));
+        perror("buf");
         return ERR_SOCKET;
     }
 #ifndef _WIN32

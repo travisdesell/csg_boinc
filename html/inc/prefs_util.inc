@@ -40,10 +40,12 @@ function check_subset($x) {
 }
 
 abstract class PREF {
-    public $desc;
-    public $tag;    // the pref's primary XML tag
-    function __construct($desc, $tag) {
+    public $desc;       // short description
+    public $tooltip;    // longer description, shown as tooltip
+    public $tag;        // the pref's primary XML tag
+    function __construct($desc, $tooltip, $tag) {
         $this->desc = $desc;
+        $this->tooltip = $tooltip;
         $this->tag = $tag;
     }
 
@@ -54,11 +56,20 @@ abstract class PREF {
     abstract function xml_parse(&$prefs, $name, $text);
     abstract function set_default(&$prefs);
 
+    function tooltip_tr() {
+        if ($this->tooltip) {
+            echo "<tr title=\"$this->tooltip\">";
+        } else {
+            echo "<tr>";
+        }
+    }
+
     // multi-column display (read only)
     //
     function show_cols($prefs) {
         global $venues;
-        echo "<tr><td class=fieldname>$this->desc</td>";
+        $this->tooltip_tr();
+        echo "<td class=fieldname>$this->desc</td>";
         $tag = $this->tag;
         if (isset($prefs->$tag)) {
             $this->show_value($prefs);
@@ -78,7 +89,8 @@ abstract class PREF {
     // show read-only row
     //
     function show($prefs) {
-        echo "<tr><td class=fieldname>$this->desc</td>";
+        $this->tooltip_tr();
+        echo "<td class=fieldname>$this->desc</td>";
         $tag = $this->tag;
         if (isset($prefs->$tag)) {
             $this->show_value($prefs);
@@ -93,25 +105,33 @@ abstract class PREF {
     function show_form_row($prefs, $error) {
         $tag = $this->tag;
         $class = isset($error->$tag)?"fieldname_error":"fieldname";
-        echo "<tr><td class=$class>$this->desc</td>";
+        $this->tooltip_tr();
+        echo "<td class=$class>$this->desc</td>";
         $this->show_form($prefs, $error);
         echo "</tr>\n";
+    }
+}
+
+function readonly_checkbox($checked) {
+    if ($checked) {
+        return "<input type=checkbox onclick=\"return false\" checked>";
+    } else {
+        return "<input type=checkbox onclick=\"return false\">";
     }
 }
 
 class PREF_BOOL extends PREF {
     public $default;
     public $invert;     // show to user in opposite sense
-    function __construct($desc, $tag, $default, $invert=false) {
+    function __construct($desc, $tooltip, $tag, $default, $invert=false) {
         $this->default = $default;
         $this->invert = $invert;
-        parent::__construct($desc, $tag);
+        parent::__construct($desc, $tooltip, $tag);
     }
     function show_value($prefs) {
         $tag = $this->tag;
         $v = $this->invert?!$prefs->$tag:$prefs->$tag;
-        $x = $v?tra("yes"):tra("no");
-        echo "<td>$x</td>";
+        echo "<td>".readonly_checkbox($v)."</td>";
     }
     function show_form($prefs, $error) {
         $tag = $this->tag;
@@ -156,9 +176,12 @@ class NUM_SPEC {
     public $min;
     public $max;
     public $default;
+    public $default2;
+        // for optional prefs where the default is zero (ignored)
+        // this is the value if they check the box
     public $scale;
 
-    function __construct($suffix, $min, $max, $default, $scale=1) {
+    function __construct($suffix, $min, $max, $default, $scale=1, $default2=0) {
         if (substr($suffix, 0, 1) == "%") {
             $this->suffix = $suffix;
         } else {
@@ -167,22 +190,30 @@ class NUM_SPEC {
         $this->min = $min;
         $this->max = $max;
         $this->default = $default;
+        $this->default2 = $default2;
         $this->scale = $scale;
     }
     function value_str($v) {
         $v /= $this->scale;
+        if ($v < $this->min || $v > $this->max) {
+            $v = $this->default;
+        }
         if ($v == 0) {
             $v = "--- ";
         }
         $v .= "$this->suffix ";
         return $v;
     }
-    function form_str($tag, $v) {
+    function form_str($tag, $v, $had_error, $disabled=false, $id=null) {
         if (is_numeric($v)) {
             $v /= $this->scale;
-            if ($v == 0) $v = "";
+            if (!$had_error && ($v < $this->min || $v > $this->max)) {
+                $v = $this->default;
+            }
         }
-        return "<input size=5 name=$tag value='$v'> $this->suffix ";
+        if ($disabled) $v = "";
+        $i = $id?"id=$id":"";
+        return "<input type=text size=5 name=$tag value='$v' $disabled $i>$this->suffix ";
     }
     function form_convert($in, &$out, &$error) {
         $error = false;
@@ -197,13 +228,19 @@ class NUM_SPEC {
             $error = true;
         }
     }
+    function get_default() {
+        if ($this->default) return $this->default;
+        return $this->default2;
+    }
 }
 
+// a numeric item
+//
 class PREF_NUM extends PREF {
     public $num_spec;
-    function __construct($desc, $tag, $num_spec) {
+    function __construct($desc, $tooltip, $tag, $num_spec) {
         $this->num_spec = $num_spec;
-        parent::__construct($desc, $tag);
+        parent::__construct($desc, $tooltip, $tag);
     }
     function show_value($prefs) {
         $tag = $this->tag;
@@ -211,20 +248,22 @@ class PREF_NUM extends PREF {
     }
     function show_form($prefs, $error) {
         $tag = $this->tag;
-        $class = isset($error->$tag)?"fieldvalue_error":"fieldvalue";
+        $had_error = isset($error->$tag);
+        $class = $had_error ?"fieldvalue_error":"fieldvalue";
         echo "<td class=$class>"
-            .$this->num_spec->form_str($tag, $prefs->$tag)
+            .$this->num_spec->form_str($tag, $prefs->$tag, $had_error)
             ."</td>
         ";
     }
     function parse_form(&$prefs, &$error) {
         $tag = $this->tag;
-        $this->num_spec->form_convert($_GET[$tag], $prefs->$tag, $e);
+        $this->num_spec->form_convert(get_str($tag, true), $prefs->$tag, $e);
         if ($e) $error->$tag = true;
     }
     function xml_string($prefs) {
         $tag = $this->tag;
         $v = $prefs->$tag;
+        if (!$v) $v = 0;
         return "<$tag>$v</$tag>\n";
     }
     function xml_parse(&$prefs, $name, $text) {
@@ -239,39 +278,149 @@ class PREF_NUM extends PREF {
     }
 }
 
+function checkbox_clicked_js() {
+    echo "
+        <script type=text/javascript>
+        function checkbox_clicked(id, tid, d) {
+            e = document.getElementById(id);
+            t = document.getElementById(tid);
+            if (e.checked) {
+                t.disabled = false;
+                t.value = d;
+            } else {
+                t.disabled = true;
+                t.value = '';
+            }
+        }
+        function checkbox_clicked2(id, tid1, tid2, d1, d2) {
+            e = document.getElementById(id);
+            t1 = document.getElementById(tid1);
+            t2 = document.getElementById(tid2);
+            if (e.checked) {
+                t1.disabled = false;
+                t1.value = d1;
+                t2.disabled = false;
+                t2.value = d2;
+            } else {
+                t1.disabled = true;
+                t1.value = '';
+                t2.disabled = true;
+                t2.value = '';
+            }
+        }
+        </script>
+    ";
+}
+
+// an optional numeric item where 0 means not specified
+//
+class PREF_OPT_NUM extends PREF {
+    public $num_spec;
+    function __construct($desc, $tooltip, $tag, $num_spec) {
+        $this->num_spec = $num_spec;
+        parent::__construct($desc, $tooltip, $tag);
+    }
+    function show_value($prefs) {
+        $tag = $this->tag;
+        $x = $prefs->$tag;
+        echo "<td>";
+        echo $this->num_spec->value_str($x);
+        echo "</td>";
+    }
+    function show_form($prefs, $error) {
+        $tag = $this->tag;
+        $had_error = isset($error->$tag);
+        $class = $had_error ?"fieldvalue_error":"fieldvalue";
+        $checkbox_id = $this->tag."_cb";
+        $text_id = $this->tag;
+        $default = $this->num_spec->get_default();
+        $val = $prefs->$tag;
+        $c = $val?"checked":"";
+        $d = $val?"":"disabled";
+        echo "<td class=$class>"
+            ."<input type=checkbox id=$checkbox_id onClick=\"checkbox_clicked('$checkbox_id', '$text_id', $default)\" $c>"
+            .$this->num_spec->form_str($tag, $prefs->$tag, $had_error, $d, $text_id)
+            ."</td>
+        ";
+    }
+    function parse_form(&$prefs, &$error) {
+        $tag = $this->tag;
+        $this->num_spec->form_convert(get_str($tag, true), $prefs->$tag, $e);
+        if ($e) $error->$tag = true;
+    }
+    function xml_string($prefs) {
+        $tag = $this->tag;
+        $v = $prefs->$tag;
+        if (!$v) $v = 0;
+        return "<$tag>$v</$tag>\n";
+    }
+    function xml_parse(&$prefs, $name, $text) {
+        $tag = $this->tag;
+        if ($name != $tag) return false;
+        $prefs->$tag = $text;
+        return true;
+    }
+    function set_default(&$prefs) {
+        $tag = $this->tag;
+        $prefs->$tag = $this->num_spec->default;
+    }
+}
+
+// optional pair of numbers
+// for "max X MB in Y days"
+//
 class PREF_NUM2 extends PREF {
     public $tag2;
     public $num_spec1, $num_spec2;
-    function __construct($desc, $tag1, $tag2, $num_spec1, $num_spec2) {
+    function __construct($desc, $tooltip, $tag1, $tag2, $num_spec1, $num_spec2) {
         $this->tag2 = $tag2;
         $this->num_spec1 = $num_spec1;
         $this->num_spec2 = $num_spec2;
-        parent::__construct($desc, $tag1);
+        parent::__construct($desc, $tooltip, $tag1);
     }
     function show_value($prefs) {
         $tag = $this->tag;
         $tag2 = $this->tag2;
+        $v1 = $prefs->$tag;
+        $v2 = $prefs->$tag2;
         echo "<td>"
-            .$this->num_spec1->value_str($prefs->$tag)
-            .$this->num_spec2->value_str($prefs->$tag2)
-            ."</td>";
+            .$this->num_spec1->value_str($v1)
+            .$this->num_spec2->value_str($v2)
+            ."</td>
+        ";
     }
     function show_form($prefs, $error) {
         $tag = $this->tag;
         $tag2 = $this->tag2;
-        $class = (isset($error->$tag) || isset($error->$tag2))?"fieldvalue_error":"fieldvalue";
+        $had_error = isset($error->$tag) || isset($error->$tag2);
+        $class = $had_error?"fieldvalue_error":"fieldvalue";
+        $checkbox_id = $this->tag."_cb";
+        $t1_id = $this->tag."_t1";
+        $t2_id = $this->tag."_t2";
+        $v1 = $prefs->$tag;
+        $v2 = $prefs->$tag2;
+        if ($v1 && $v2) {
+            $c = "checked";
+            $d = "";
+        } else {
+            $c = "";
+            $d = "disabled";
+        }
+        $def1 = $this->num_spec1->get_default();
+        $def2 = $this->num_spec2->get_default();
         echo "<td class=$class>"
-            .$this->num_spec1->form_str($tag, $prefs->$tag)
-            .$this->num_spec2->form_str($tag2, $prefs->$tag2)
+            ."<input type=checkbox id=$checkbox_id onClick=\"checkbox_clicked2('$checkbox_id', '$t1_id', '$t2_id', $def1, $def2)\" $c>"
+            .$this->num_spec1->form_str($tag, $prefs->$tag, $had_error, $d, $t1_id)
+            .$this->num_spec2->form_str($tag2, $prefs->$tag2, $had_error, $d, $t2_id)
             ."</td>
         ";
     }
     function parse_form(&$prefs, &$error) {
         $tag = $this->tag;
         $tag2 = $this->tag2;
-        $this->num_spec1->form_convert($_GET[$tag], $prefs->$tag, $e);
+        $this->num_spec1->form_convert(get_str($tag, true), $prefs->$tag, $e);
         if ($e) $error->$tag = true;
-        $this->num_spec2->form_convert($_GET[$tag2], $prefs->$tag2, $e);
+        $this->num_spec2->form_convert(get_str($tag2, true), $prefs->$tag2, $e);
         if ($e) $error->$tag2 = $e;
     }
     function xml_string($prefs) {
@@ -297,9 +446,9 @@ class PREF_NUM2 extends PREF {
     }
 }
 
-function hour_select($x, $name) {
+function hour_select($x, $name, $id, $d) {
     $s = "";
-    $s = $s. "<select name=$name>\n";
+    $s = $s. "<select name=$name id=$id $d>\n";
     for ($i=0; $i<24; $i++) {
         $sel = ($x == $i)?"selected":"";
         $s = $s."<option value=$i $sel> $i:00";
@@ -308,11 +457,13 @@ function hour_select($x, $name) {
     return $s;
 }
 
+// optional hour range
+//
 class PREF_HOUR_RANGE extends PREF {
     public $tag2;
-    function __construct($desc, $tag, $tag2) {
+    function __construct($desc, $tooltip, $tag, $tag2) {
         $this->tag2 = $tag2;
-        parent::__construct($desc, $tag);
+        parent::__construct($desc, $tooltip, $tag);
     }
     function show_value($prefs) {
         $tag = $this->tag;
@@ -329,20 +480,34 @@ class PREF_HOUR_RANGE extends PREF {
     function show_form($prefs, $error) {
         $tag = $this->tag;
         $tag2 = $this->tag2;
+        $h1 = $prefs->$tag;
+        $h2 = $prefs->$tag2;
+        $checkbox_id = $this->tag."_cb";
+        $t1_id = $this->tag."_t1";
+        $t2_id = $this->tag."_t2";
+        if ($h1 == $h2) {
+            $c = "";
+            $d = "disabled";
+        } else {
+            $c = "checked";
+            $d = "";
+        }
         echo "<td class=fieldvalue>"
-            .hour_select($prefs->$tag, $tag)
+            ."<input type=checkbox id=$checkbox_id onClick=\"checkbox_clicked2('$checkbox_id', '$t1_id', '$t2_id', 0, 23)\" $c>"
+
+            .hour_select($prefs->$tag, $tag, $t1_id, $d)
             ." "
             .tra("and")
             ." "
-            .hour_select($prefs->$tag2, $tag2)
+            .hour_select($prefs->$tag2, $tag2, $t2_id, $d)
             ."
         ";
     }
     function parse_form(&$prefs, &$error) {
         $tag = $this->tag;
         $tag2 = $this->tag2;
-        $prefs->$tag = $_GET[$tag];
-        $prefs->$tag2 = $_GET[$tag2];
+        $prefs->$tag = get_str($tag, true);
+        $prefs->$tag2 = get_str($tag2, true);
     }
     function xml_string($prefs) {
         $tag = $this->tag;
@@ -377,25 +542,31 @@ class PREF_HOUR_RANGE extends PREF {
 // display preference subsets as Columns
 //
 function row_top($x, $ncols=6, $class="heading") {
-    echo "<tr><td class=$class width=35%>$x</td>";
-    echo "<td class=$class width=10%><b>".tra("Default")."</b></td>
-        <td class=$class width=10%><b>".tra("Home")."</b></td>
-        <td class=$class width=10%><b>".tra("School")."</b></td>
-        <td class=$class width=10%><b>".tra("Work")."</b></td>
+    echo "<tr><th class=$class width=35%>$x</th>";
+    echo "<th class=$class width=10%><b>".tra("Default")."</b></th>
+        <th class=$class width=10%><b>".tra("Home")."</b></th>
+        <th class=$class width=10%><b>".tra("School")."</b></th>
+        <th class=$class width=10%><b>".tra("Work")."</b></th>
     ";
-    echo "<td width=15%><br></td></tr>\n";
+    //echo "<th width=15%><br></th>
+    echo "</tr>\n";
 }
 
 //
 // row_defs - Display a value for all 4 venues in one row
 //
-function row_defs($pre, $item, $post, $type, $prefs) {
+function row_defs($pre, $item, $post, $type, $prefs, $tooltip=null) {
     $gen = $prefs->$item;
     $hom  = (isset($prefs->home) && isset($prefs->home->$item)) ? $prefs->home->$item : "--";
     $schl = (isset($prefs->school) && isset($prefs->school->$item)) ? $prefs->school->$item : "--";
     $wrk  = (isset($prefs->work) && isset($prefs->work->$item)) ? $prefs->work->$item : "--";
 
-    echo "<tr><td class=fieldname>$pre</td>";
+    if ($tooltip) {
+        echo "<tr title=\"$tooltip\">";
+    } else {
+        echo "<tr>";
+    }
+    echo "<td class=fieldname>$pre</td>";
     row_field($gen,  $type);
     row_field($hom,  $type);
     row_field($schl, $type);

@@ -37,7 +37,6 @@
 #include "DlgEventLog.h"
 #include "AdvancedFrame.h"
 #include "DlgDiagnosticLogFlags.h"
-#include <wx/display.h>
 
 #ifdef __WXMAC__
 #include <time.h>
@@ -49,6 +48,10 @@
 ////@begin XPM images
 ////@end XPM images
 
+#define DLGEVENTLOG_INITIAL_WIDTH ADJUSTFORXDPI(640)
+#define DLGEVENTLOG_INITIAL_HEIGHT ADJUSTFORYDPI(480)
+#define DLGEVENTLOG_MIN_WIDTH ADJUSTFORXDPI(600)
+#define DLGEVENTLOG_MIN_HEIGHT ADJUSTFORYDPI(250)
 
 #define COLUMN_PROJECT              0
 #define COLUMN_TIME                 1
@@ -63,14 +66,15 @@ static std::string s_strFilteredProjectName;
  * CDlgEventLog type definition
  */
 
-IMPLEMENT_DYNAMIC_CLASS( CDlgEventLog, wxDialog )
+IMPLEMENT_DYNAMIC_CLASS( CDlgEventLog, DlgEventLogBase )
 
 /*!
  * CDlgEventLog event table definition
  */
 
-BEGIN_EVENT_TABLE( CDlgEventLog, wxDialog )
+BEGIN_EVENT_TABLE( CDlgEventLog, DlgEventLogBase )
 ////@begin CDlgEventLog event table entries
+    EVT_ACTIVATE(CDlgEventLog::OnActivate)
     EVT_HELP(wxID_ANY, CDlgEventLog::OnHelp)
     EVT_BUTTON(wxID_OK, CDlgEventLog::OnOK)
     EVT_BUTTON(ID_COPYAll, CDlgEventLog::OnMessagesCopyAll)
@@ -172,8 +176,10 @@ bool CDlgEventLog::Create( wxWindow* parent, wxWindowID id, const wxString& capt
 #ifdef __WXMSW__
         // Get the current display space for the current window
 		int iDisplay = wxNOT_FOUND;
-		if ( wxGetApp().GetFrame() != NULL ) iDisplay = wxDisplay::GetFromWindow(wxGetApp().GetFrame());
-		if ( iDisplay == wxNOT_FOUND ) iDisplay = 0;
+		if ( wxGetApp().GetFrame() != NULL )
+            iDisplay = wxDisplay::GetFromWindow(wxGetApp().GetFrame());
+		if ( iDisplay == wxNOT_FOUND )
+            iDisplay = 0;
         wxDisplay *display = new wxDisplay(iDisplay);
         wxRect rDisplay = display->GetClientArea();
 
@@ -198,7 +204,6 @@ bool CDlgEventLog::Create( wxWindow* parent, wxWindowID id, const wxString& capt
 
         delete display;
 #endif
-
 #ifdef __WXMAC__
         // If the user has changed the arrangement of multiple 
         // displays, make sure the window title bar is still on-screen.
@@ -211,8 +216,9 @@ bool CDlgEventLog::Create( wxWindow* parent, wxWindowID id, const wxString& capt
         oTempSize = size;
     }
 
-    wxDialog::Create( parent, id, caption, oTempPoint, oTempSize, style );
+    DlgEventLogBase::Create( parent, id, caption, oTempPoint, oTempSize, style );
 
+    SetSizeHints(DLGEVENTLOG_MIN_WIDTH, DLGEVENTLOG_MIN_HEIGHT);
     SetExtraStyle(GetExtraStyle()|wxWS_EX_BLOCK_EVENTS);
 
     // Initialize Application Title
@@ -275,11 +281,6 @@ bool CDlgEventLog::Create( wxWindow* parent, wxWindowID id, const wxString& capt
 
 void CDlgEventLog::CreateControls()
 {
-    CSkinAdvanced*     pSkinAdvanced = wxGetApp().GetSkinManager()->GetAdvanced();
-
-    wxASSERT(pSkinAdvanced);
-    wxASSERT(wxDynamicCast(pSkinAdvanced, CSkinAdvanced));
-
     wxFlexGridSizer* itemFlexGridSizer2 = new wxFlexGridSizer(2, 1, 0, 0);
     itemFlexGridSizer2->AddGrowableRow(0);
     itemFlexGridSizer2->AddGrowableCol(0);
@@ -330,20 +331,6 @@ void CDlgEventLog::CreateControls()
     wxButton* itemButton44 = new wxButton(this, wxID_OK, _("&Close"),  wxDefaultPosition, wxDefaultSize);
     itemBoxSizer4->Add(itemButton44, 0, wxALIGN_CENTER_VERTICAL|wxALL, 5);
 
-#ifndef __WXMAC__
-    wxContextHelpButton* itemButton45 = new wxContextHelpButton(this);
-    itemBoxSizer4->Add(itemButton45, 0, wxALIGN_CENTER_VERTICAL|wxALL, 5);
-#else
-	wxButton* itemButton45 = new wxButton(this, ID_SIMPLE_HELP, _("&Help"), wxDefaultPosition, wxDefaultSize);
-    wxString helpTip;
-    helpTip.Printf(_("Get help with %s"), pSkinAdvanced->GetApplicationShortName().c_str());
-    itemButton45->SetHelpText(helpTip);
-#ifdef wxUSE_TOOLTIPS
-	itemButton45->SetToolTip(helpTip);
-#endif
-    itemBoxSizer4->Add(itemButton45, 0, wxALIGN_CENTER_VERTICAL|wxALL, 5);
-#endif
-
     SetFilterButtonText(); 
 }
 
@@ -388,6 +375,16 @@ void CDlgEventLog::SetTextColor() {
     }
 }
 
+
+/*!
+ * wxEVT_ACTIVATE event handler for ID_DLGMESSAGES
+ */
+
+void CDlgEventLog::OnActivate(wxActivateEvent& event) {
+    bool isActive = event.GetActive();
+    if (isActive) wxGetApp().SetEventLogWasActive(true);
+    event.Skip();
+}
 
 /*!
  * wxEVT_HELP event handler for ID_DLGMESSAGES
@@ -778,16 +775,16 @@ void CDlgEventLog::GetWindowDimensions( wxPoint& position, wxSize& size ) {
 
     pConfig->Read(wxT("YPos"), &iTop, 30);
     pConfig->Read(wxT("XPos"), &iLeft, 30);
-    pConfig->Read(wxT("Width"), &iWidth, 640);
-    pConfig->Read(wxT("Height"), &iHeight, 480);
+    pConfig->Read(wxT("Width"), &iWidth, DLGEVENTLOG_INITIAL_WIDTH);
+    pConfig->Read(wxT("Height"), &iHeight, DLGEVENTLOG_INITIAL_HEIGHT);
 
     // Guard against a rare situation where registry values are zero
-    if (iWidth < 50) iWidth = 640;
-    if (iHeight < 50) iHeight = 480;
+    if (iWidth < 50) iWidth = DLGEVENTLOG_INITIAL_WIDTH;
+    if (iHeight < 50) iHeight = DLGEVENTLOG_INITIAL_HEIGHT;
     position.y = iTop;
     position.x = iLeft;
-    size.x = iWidth;
-    size.y = iHeight;
+    size.x = std::max(iWidth, DLGEVENTLOG_MIN_WIDTH);
+    size.y = std::max(iHeight, DLGEVENTLOG_MIN_HEIGHT);
 }
 
 

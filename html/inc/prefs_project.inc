@@ -42,10 +42,6 @@
 // In addition there are some fields of the user table
 // (send_email and show_hosts) that are treated as project preferences
 
-error_reporting(E_ALL);
-ini_set('display_errors', true);
-ini_set('display_startup_errors', true);
-
 include_once("../inc/prefs_util.inc");
 include_once("../project/project_specific_prefs.inc");
 
@@ -53,10 +49,8 @@ $app_types = get_app_types();
 
 $project_pref_descs = array(
     new PREF_NUM(
-        $x = tra("Resource share")
-            ."<br><span class=note>"
-            .tra("Determines the proportion of your computer's resources allocated to this project. Example: if you participate in two BOINC projects with resource shares of 100 and 200, the first will get 1/3 of your resources and the second will get 2/3. %2")
-            ."</span>",
+        tra("Resource share"),
+        tra("Determines the proportion of your computer's resources allocated to this project. For example, if you participate in two BOINC projects with resource shares of 100 and 200, the first will get 1/3 of your resources and the second will get 2/3."),
         "resource_share",
         new NUM_SPEC("", 0, 9999999, 100)
     ),
@@ -65,6 +59,7 @@ $project_pref_descs = array(
 if (!empty($accelerate_gpu_apps_pref)) {
     $project_pref_descs[] = new PREF_BOOL(
         tra("Accelerate GPU tasks by dedicating a CPU to each one?"),
+        "",
         "accelerate_gpu_apps",
         false
     );
@@ -72,10 +67,8 @@ if (!empty($accelerate_gpu_apps_pref)) {
 
 if ($app_types->cpu) {
     $project_pref_descs[] = new PREF_BOOL (
-        tra("Use CPU")
-            ."<br><span class=note>"
-            .tra("Enforced by version 6.10+")
-            ."</span>",
+        tra("Use CPU"),
+        "Request CPU-only tasks from this project.",
         "no_cpu",
         false,
         true
@@ -83,10 +76,8 @@ if ($app_types->cpu) {
 }
 if ($app_types->ati) {
     $project_pref_descs[] = new PREF_BOOL (
-        tra("Use ATI GPU")
-            ."<br><span class=note>"
-            .tra("Enforced by version 6.10+")
-            ."</span>",
+        tra("Use ATI GPU"),
+        "Request ATI GPU tasks from this project.",
         "no_ati",
         false,
         true
@@ -94,10 +85,8 @@ if ($app_types->ati) {
 }
 if ($app_types->cuda) {
     $project_pref_descs[] = new PREF_BOOL (
-        tra("Use NVIDIA GPU")
-            ."<br><span class=note>"
-            .tra("Enforced by version 6.10+")
-            ."</span>",
+        tra("Use NVIDIA GPU"),
+        "Request NVIDIA GPU tasks from this project.",
         "no_cuda",
         false,
         true
@@ -105,10 +94,8 @@ if ($app_types->cuda) {
 }
 if ($app_types->intel_gpu) {
     $project_pref_descs[] = new PREF_BOOL (
-        tra("Use Intel GPU")
-            ."<br><span class=note>"
-            .tra("Enforced by version 7.2+")
-            ."</span>",
+        tra("Use Intel GPU"),
+        "Request Intel GPU tasks from this project.",
         "no_intel_gpu",
         false,
         true
@@ -117,18 +104,16 @@ if ($app_types->intel_gpu) {
 
 if (project_has_beta()) {
     $project_pref_descs[] = new PREF_BOOL(
-        tra("Run test applications?")
-            ."<br><span class=note>"
-            .tra("This helps us develop applications, but may cause jobs to fail on your computer")
-            ."</span>",
+        tra("Run test applications?"),
+        tra("This helps us develop applications, but may cause jobs to fail on your computer"),
         "allow_beta_work",
         false
     );
 }
 if (defined("EMAIL_FROM")) {
-    $x = "<br><span class=note>"
+    $x = "<br><p class=\"text-muted\">"
         .tra("Emails will be sent from %1; make sure your spam filter accepts this address.", EMAIL_FROM)
-        ."</span>";
+        ."</p>";
 } else {
     $x = "";
 }
@@ -136,12 +121,14 @@ if (defined("EMAIL_FROM")) {
 $privacy_pref_descs = array (
     new PREF_BOOL(
         tra("Is it OK for %1 and your team (if any) to email you?", PROJECT).$x,
+        "",
         "send_email",
         true,
         false
     ),
     new PREF_BOOL(
         tra("Should %1 show your computers on its web site?", PROJECT),
+        "Allows other users to see your computers and tasks. Useful to troubleshoot issues or to compare computers.",
         "show_hosts",
         true,
         false
@@ -280,11 +267,9 @@ function prefs_show_project_specific($prefs, $columns=false) {
 function print_prefs_display_project($user, $columns=false) {
     $project_prefs = prefs_parse_project($user->project_prefs);
 
-    start_table();
-    $switch_link = " <font size=\"-2\"><a href=prefs.php?subset=project&cols=". (int)!$columns .">".tra("(Switch View)")."</a></font>";
+    $switch_link = " <font size=\"-1\"><a href=prefs.php?subset=project&cols=". (int)!$columns .">".tra("(Switch View)")."</a></font>";
     if ($columns) {
-        row1(tra("Combined preferences").$switch_link, 2, "heading");
-        echo "<tr><td colspan=2>";
+        echo "<h2>".tra("Combined preferences").$switch_link."</h2>";
         start_table();
         prefs_show_privacy($user, true);
         venue_show($user);
@@ -293,26 +278,23 @@ function print_prefs_display_project($user, $columns=false) {
         prefs_show_project_specific($project_prefs, true);
         row_links("project", $project_prefs);
         end_table();
-        echo "</td></tr>\n";
     } else {
         if (isset($project_prefs->home) || isset($project_prefs->work) || isset($project_prefs->school)) {
-            row1(tra("Primary (default) preferences").$switch_link, 2, "heading");
+            echo "<h2>".tra("Primary (default) preferences").$switch_link."</h2>";
         }
-        echo "<tr><td colspan=2>";
         start_table();
         prefs_show_project($project_prefs, false);
         prefs_show_privacy($user, false);
         venue_show($user);
         prefs_show_project_specific($project_prefs, false);
         $tokens = url_tokens($user->authenticator);
-        row2("", "<a href=prefs_edit.php?subset=project$tokens>".tra("Edit %1 preferences", PROJECT)."</a>");
+        row2("", "<a href=prefs_edit.php?subset=project$tokens>".tra("Edit preferences")."</a>");
         end_table();
-        echo "</td></tr>\n";
+
         prefs_display_venue($project_prefs, "home", "project");
         prefs_display_venue($project_prefs, "school", "project");
         prefs_display_venue($project_prefs, "work", "project");
     }
-    end_table();
 }
 
 ////////////////////////////////////////////

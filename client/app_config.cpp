@@ -27,9 +27,49 @@
 
 bool have_max_concurrent = false;
 
+int APP_CONFIG::parse_gpu_versions(XML_PARSER& xp, PROJECT* p) {
+    double x;
+    while (!xp.get_tag()) {
+        if (xp.match_tag("/gpu_versions")) return 0;
+        else if (xp.parse_double("gpu_usage", x)) {
+            if (x <= 0) {
+                msg_printf(p, MSG_USER_ALERT,
+                    "gpu_usage must be positive in app_config.xml"
+                );
+            } else {
+                gpu_gpu_usage = x;
+            }
+            continue;
+        }
+        else if (xp.parse_double("cpu_usage", x)) {
+            if (x < 0) {
+                msg_printf(p, MSG_USER_ALERT,
+                    "cpu_usage must be non-negative in app_config.xml"
+                );
+            } else {
+                gpu_cpu_usage = x;
+            }
+            continue;
+        }
+        if (log_flags.unparsed_xml) {
+            msg_printf(p, MSG_INFO,
+                "Unparsed line in app_config.xml: %s",
+                xp.parsed_tag
+            );
+        }
+    }
+    msg_printf_notice(p, false, NULL,
+        "Missing </gpu_versions> in app_config.xml"
+    );
+    return ERR_XML_PARSE;
+}
+
+// In these parsing functions, if there's an error you must
+// - generate a notice containing the string "app_config.xml"
+// - return an error code
+//
 int APP_CONFIG::parse(XML_PARSER& xp, PROJECT* p) {
     memset(this, 0, sizeof(APP_CONFIG));
-    double x;
 
     while (!xp.get_tag()) {
         if (xp.match_tag("/app")) return 0;
@@ -39,34 +79,16 @@ int APP_CONFIG::parse(XML_PARSER& xp, PROJECT* p) {
             continue;
         }
         if (xp.match_tag("gpu_versions")) {
-            while (!xp.get_tag()) {
-                if (xp.match_tag("/gpu_versions")) break;
-                if (xp.parse_double("gpu_usage", x)) {
-                    if (x <= 0) {
-                        msg_printf(p, MSG_USER_ALERT,
-                            "gpu_usage must be positive in app_config.xml"
-                        );
-                    } else {
-                        gpu_gpu_usage = x;
-                    }
-                    continue;
-                }
-                if (xp.parse_double("cpu_usage", x)) {
-                    if (x < 0) {
-                        msg_printf(p, MSG_USER_ALERT,
-                            "cpu_usage must be non-negative in app_config.xml"
-                        );
-                    } else {
-                        gpu_cpu_usage = x;
-                    }
-                    continue;
-                }
-            }
+            int retval = parse_gpu_versions(xp, p);
+            if (retval) return retval;
             continue;
         }
         if (xp.parse_bool("fraction_done_exact", fraction_done_exact)) {
             continue;
         }
+
+        // unparsed XML not considered an error; maybe it should be?
+        //
         if (log_flags.unparsed_xml) {
             msg_printf(p, MSG_INFO,
                 "Unparsed line in app_config.xml: %s",
@@ -75,6 +97,9 @@ int APP_CONFIG::parse(XML_PARSER& xp, PROJECT* p) {
         }
         xp.skip_unexpected(log_flags.unparsed_xml, "APP_CONFIG::parse");
     }
+    msg_printf_notice(p, false, NULL,
+        "Missing </app> in app_config.xml"
+    );
     return ERR_XML_PARSE;
 }
 
@@ -82,6 +107,12 @@ int APP_VERSION_CONFIG::parse(XML_PARSER& xp, PROJECT* p) {
     memset(this, 0, sizeof(APP_VERSION_CONFIG));
 
     while (!xp.get_tag()) {
+        if (!xp.is_tag) {
+            msg_printf_notice(p, false, NULL,
+                "unexpected text '%s' in app_config.xml", xp.parsed_tag
+            );
+            return ERR_XML_PARSE;
+        }
         if (xp.match_tag("/app_version")) return 0;
         if (xp.parse_str("app_name", app_name, 256)) continue;
         if (xp.parse_str("plan_class", plan_class, 256)) continue;
@@ -96,29 +127,41 @@ int APP_VERSION_CONFIG::parse(XML_PARSER& xp, PROJECT* p) {
         }
         xp.skip_unexpected(log_flags.unparsed_xml, "APP_VERSION_CONFIG::parse");
     }
+    msg_printf_notice(p, false, NULL,
+        "Missing </app_version> in app_config.xml"
+    );
     return ERR_XML_PARSE;
 }
 
 int APP_CONFIGS::parse(XML_PARSER& xp, PROJECT* p) {
     int n;
-    app_configs.clear();
-    if (!xp.parse_start("app_config")) return ERR_XML_PARSE;
+    clear();
+    if (!xp.parse_start("app_config")) {
+        msg_printf_notice(p, false, NULL,
+            "Missing <app_config> in app_config.xml"
+        );
+        return ERR_XML_PARSE;
+    }
     while (!xp.get_tag()) {
+        if (!xp.is_tag) {
+            msg_printf_notice(p, false, NULL,
+                "unexpected text '%s' in app_config.xml", xp.parsed_tag
+            );
+            return ERR_XML_PARSE;
+        }
         if (xp.match_tag("/app_config")) return 0;
         if (xp.match_tag("app")) {
             APP_CONFIG ac;
             int retval = ac.parse(xp, p);
-            if (!retval) {
-                app_configs.push_back(ac);
-            }
+            if (retval) return retval;
+            app_configs.push_back(ac);
             continue;
         }
         if (xp.match_tag("app_version")) {
             APP_VERSION_CONFIG avc;
             int retval = avc.parse(xp, p);
-            if (!retval) {
-                app_version_configs.push_back(avc);
-            }
+            if (retval) return retval;
+            app_version_configs.push_back(avc);
             continue;
         }
         if (xp.parse_int("project_max_concurrent", n)) {
@@ -128,14 +171,16 @@ int APP_CONFIGS::parse(XML_PARSER& xp, PROJECT* p) {
             }
             continue;
         }
-        if (log_flags.unparsed_xml) {
-            msg_printf(p, MSG_INFO,
-                "Unparsed line in app_config.xml: %s",
-                xp.parsed_tag
-            );
-        }
+        msg_printf_notice(p, false, NULL,
+            "Unknown tag in app_config.xml: %s",
+            xp.parsed_tag
+        );
+
         xp.skip_unexpected(log_flags.unparsed_xml, "APP_CONFIGS::parse");
     }
+    msg_printf_notice(p, false, NULL,
+        "Missing </app_config> in app_config.xml"
+    );
     return ERR_XML_PARSE;
 }
 
@@ -143,8 +188,7 @@ int APP_CONFIGS::parse_file(FILE* f, PROJECT* p) {
     MIOFILE mf;
     XML_PARSER xp(&mf);
     mf.init_file(f);
-    int retval = parse(xp, p);
-    return retval;
+    return parse(xp, p);
 }
 
 static void show_warning(PROJECT* p, char* name) {
@@ -154,13 +198,17 @@ static void show_warning(PROJECT* p, char* name) {
     );
 }
 
-void APP_CONFIGS::config_app_versions(PROJECT* p, bool show_warnings) {
+int APP_CONFIGS::config_app_versions(PROJECT* p, bool show_warnings) {
     unsigned int i;
+    bool showed_notice = false;
     for (i=0; i<app_configs.size(); i++) {
         APP_CONFIG& ac = app_configs[i];
         APP* app = gstate.lookup_app(p, ac.name);
         if (!app) {
-            if (show_warnings) show_warning(p, ac.name);
+            if (show_warnings) {
+                show_warning(p, ac.name);
+                showed_notice = true;
+            }
             continue;
         }
         app->max_concurrent = ac.max_concurrent;
@@ -179,7 +227,10 @@ void APP_CONFIGS::config_app_versions(PROJECT* p, bool show_warnings) {
         APP_VERSION_CONFIG& avc = app_version_configs[i];
         APP* app = gstate.lookup_app(p, avc.app_name);
         if (!app) {
-            if (show_warnings) show_warning(p, avc.app_name);
+            if (show_warnings) {
+                show_warning(p, avc.app_name);
+                showed_notice = true;
+            }
             continue;
         }
         bool found = false;
@@ -200,10 +251,13 @@ void APP_CONFIGS::config_app_versions(PROJECT* p, bool show_warnings) {
         }
         if (!found) {
             msg_printf(p, MSG_USER_ALERT,
-                "Entry in app_config.xml for app '%s', plan class '%s' doesn't match any app versions", avc.app_name, avc.plan_class
+                "Entry in app_config.xml for app '%s', plan class '%s' doesn't match any app versions",
+                avc.app_name, avc.plan_class
             );
         }
     }
+    if (showed_notice) return ERR_XML_PARSE;
+    return 0;
 }
 
 void max_concurrent_init() {
@@ -247,7 +301,10 @@ void check_app_config() {
         msg_printf(p, MSG_INFO, "Found %s", APP_CONFIG_FILE_NAME);
         int retval = p->app_configs.parse_file(f, p);
         if (!retval) {
-            p->app_configs.config_app_versions(p, true);
+            retval = p->app_configs.config_app_versions(p, true);
+            if (!retval) {
+                notices.remove_notices(p, REMOVE_APP_CONFIG_MSG);
+            }
         }
         fclose(f);
     }
