@@ -134,8 +134,6 @@ function project_user_page_private($user){
     // shown in the private account page
 }
 
-if (0) {
-
 // show project-specific credit on user/team pages
 //
 function show_app_credit_user($user, $app_name, $appids) {
@@ -186,25 +184,24 @@ function show_app_credit_team($team, $app_name, $appids) {
 // - a short name, used in badge names.  Don't use "total".
 //
 $sub_projects = array(
-    array("name" => "Remote Test", "short_name" => "RT", "appids" => array(16)),
-    array("name" => "Uppercase", "short_name" => "UC", "appids" => array(1, 25)),
+    array("name" => "DNA@Home", "short_name" => "dna_at_home", "appids" => array(13)),
+    array("name" => "SubsetSum@Home", "short_name" => "subset_sum_at_home", "appids" => array(15)),
+    array("name" => "Wildlife@Home", "short_name" => "wildlife_at_home", "appids" => array(7,9,12,22))
 );
 
 function project_user_credit($user){
     global $sub_projects;
     foreach ($sub_projects as $sp) {
         show_app_credit_user($user, $sp["name"], $sp["appids"]);
-    }
+    }   
 }
 
 function project_team_credit($team) {
     global $sub_projects;
     foreach ($sub_projects as $sp) {
         show_app_credit_team($team, $sp["name"], $sp["appids"]);
-    }
+    }   
 }
-
-}   // if(0)
 
 function project_forum_post_rules() {
     // additional forum post rules

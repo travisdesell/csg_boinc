@@ -22,7 +22,7 @@ require_once("../inc/team.inc");
 require_once("../inc/user.inc");
 require_once("../inc/news.inc");
 require_once("../inc/text_transform.inc");
-require_once('/home/tdesell/wildlife_at_home/webpage/display_badges.php');
+require_once('/home/tdesell/citizen_science_grid/display_badges.php');
 
 define('THREADS_PER_PAGE', 50);
 
@@ -601,19 +601,49 @@ function show_post(
         //echo "ID: ".$user->id."<br>";
         if (!no_computing()) {
             echo tra("Combined Credit: %1", number_format($user->wildlife_total_credit + $user->dna_total_credit + $user->sss_total_credit)) ."<br>";
-            echo tra("DNA@Home Credit: %1", number_format($user->dna_total_credit)) ."<br>";
+
+            global $sub_projects;
+            foreach ($sub_projects as $sp) {
+                //show_app_credit_user($user, $sp["name"], $sp["appids"]);
+                $t = 0; 
+                $a = 0; 
+                $n = 0; 
+
+                foreach ($sp["appids"] as $appid) {
+                    $cu = BoincCreditUser::lookup(
+                        "userid=$user->id and appid=$appid and credit_type=0"
+                    );   
+                    if ($cu) {
+                        $t += $cu->total;
+                        $a += $cu->expavg;
+                        $n += $cu->njobs;
+                    }    
+                }    
+                echo $sp["name"] . ": " . number_format($t) . "<br>";
+                /*   
+                row2($sp["name"] . " credit",
+                    format_credit_large($t)." total, ".
+                    format_credit($a)." average".
+                    " ($n tasks)"
+                );  
+                 */
+            }    
+
+
+            //echo tra("DNA@Home Credit: %1", number_format($user->dna_total_credit)) ."<br>";
             //echo tra("DNA RAC: %1",    number_format($user->dna_expavg_credit))."<br>";
-            echo tra("SubsetSum@Home Credit: %1", number_format($user->sss_total_credit)) ."<br>";
+            //echo tra("SubsetSum@Home Credit: %1", number_format($user->sss_total_credit)) ."<br>";
             //echo tra("SSS RAC: %1",    number_format($user->sss_expavg_credit))."<br>";
-            echo tra("Wildlife@Home Credit: %1", number_format($user->wildlife_total_credit)) ."<br>";
+            //echo tra("Wildlife@Home Credit: %1", number_format($user->wildlife_total_credit)) ."<br>";
             //echo tra("Wildlife RAC: %1",    number_format($user->wildlife_expavg_credit))."<br>";
+
             echo tra("Wildlife@Home Watched: %1s", number_format($user->bossa_total_credit)) . "<br>";
             echo tra("Wildlife@Home Events: %1", number_format($user->valid_events)) . "<br>";
 
-            if ($user->total_credit > 10000 || $user->bossa_total_credit > 10000) {
-                echo "<br>";
-                echo get_badges($user);
-            }
+            $badges_str = get_badges($user);
+            if ($badges_str != "") $badges_str = "<br> " . $badges_str;
+            echo $badges_str;
+
         }
 
         // to use this feature:
